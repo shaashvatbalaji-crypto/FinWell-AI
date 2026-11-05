@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+data/uploads/*
+data/processed/*
+data/chroma_db/*
+!data/**/.gitkeep
+.env
+.venv/
+__pycache__/
+*.pyc
+data/uploads/
+data/chroma_db/
