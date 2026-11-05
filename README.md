@@ -1,1 +1,1 @@
-# FinWell-AI
+# FinWell AI
