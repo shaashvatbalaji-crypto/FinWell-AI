@@ -1,6 +1,9 @@
+
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Path as ApiPath, Query
+from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath
+
+from api.auth_dependencies import get_current_user
 
 from mysql_pipeline.document_storage import (
     list_user_documents,
@@ -15,9 +18,9 @@ router = APIRouter()
 
 @router.get("/documents")
 def get_user_documents(
-    user_id: int = Query(..., gt=0, description="User ID"),
+    user_id: int = Depends(get_current_user),
 ):
-    """Retrieve all financial documents uploaded by a user."""
+    """Retrieve documents belonging to the authenticated user."""
 
     result = list_user_documents(user_id)
 
@@ -41,10 +44,10 @@ def get_user_documents(
 
 @router.get("/documents/{document_id}")
 def get_document_details(
-    document_id: int = ApiPath(..., gt=0, description="Document ID"),
-    user_id: int = Query(..., gt=0, description="User ID"),
+    document_id: int = ApiPath(..., gt=0),
+    user_id: int = Depends(get_current_user),
 ):
-    """Retrieve metadata for one document belonging to the user."""
+    """Retrieve metadata for a document belonging to the authenticated user."""
 
     result = get_document_by_id(
         document_id=document_id,
@@ -54,10 +57,7 @@ def get_document_details(
     if not result.get("success"):
         raise HTTPException(
             status_code=404,
-            detail=result.get(
-                "message",
-                "Document not found for this user.",
-            ),
+            detail="Document not found for this user.",
         )
 
     return {
@@ -69,12 +69,12 @@ def get_document_details(
 
 @router.get("/documents/{document_id}/text")
 def get_document_text(
-    document_id: int = ApiPath(..., gt=0, description="Document ID"),
-    user_id: int = Query(..., gt=0, description="User ID"),
+    document_id: int = ApiPath(..., gt=0),
+    user_id: int = Depends(get_current_user),
 ):
-    """Extract and return text from a user's permanently stored PDF."""
+    """Extract text from a PDF belonging to the authenticated user."""
 
-    # 1. Confirm the document belongs to this user.
+    # 1. Confirm document ownership.
     document_result = get_document_by_id(
         document_id=document_id,
         user_id=user_id,
@@ -88,7 +88,7 @@ def get_document_text(
 
     document = document_result["document"]
 
-    # 2. Get the permanent PDF path from the database.
+    # 2. Locate the permanently stored PDF.
     pdf_path = Path(document["file_path"])
 
     if not pdf_path.exists():
@@ -97,7 +97,7 @@ def get_document_text(
             detail="The stored PDF file could not be found.",
         )
 
-    # 3. Extract text using the existing PDF reader.
+    # 3. Extract PDF text.
     extraction_result = extract_pdf_text(str(pdf_path))
 
     if not extraction_result.get("success"):
@@ -112,7 +112,7 @@ def get_document_text(
     full_text = extraction_result.get("full_text", "")
     pages = extraction_result.get("pages", [])
 
-    # 4. Handle scanned/image-only PDFs.
+    # 4. Handle scanned PDFs.
     if not full_text.strip():
         raise HTTPException(
             status_code=422,

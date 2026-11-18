@@ -2,6 +2,10 @@ from fastapi import FastAPI
 
 from api.routes.upload import router as upload_router
 from api.routes.documents import router as documents_router
+from api.routes.auth import router as auth_router
+from api.routes.transactions import router as transactions_router
+from api.routes.accounts import router as accounts_router
+from api.routes.analytics import router as analytics_router
 
 
 app = FastAPI(
@@ -40,4 +44,30 @@ app.include_router(
     documents_router,
     prefix="/api",
     tags=["Documents"],
+)
+
+# User registration and login
+app.include_router(
+    auth_router,
+    prefix="/api",
+)
+
+
+app.include_router(
+    transactions_router,
+    prefix="/api",
+    tags=["Transactions"],
+)
+
+# Financial account endpoints
+app.include_router(
+    accounts_router,
+    prefix="/api",
+    tags=["Accounts"],
+)
+
+app.include_router(
+    analytics_router,
+    prefix="/api",
+    tags=["Financial Analytics"],
 )

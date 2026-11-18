@@ -1,6 +1,37 @@
+
 from mysql.connector import Error
 
 from mysql_pipeline.db import get_db_connection
+
+
+def _get_document_account_id(cursor, document_id: int, user_id: int):
+    """
+    Retrieve the account_id associated with a document.
+
+    Also verifies that the document belongs to the specified user.
+
+    Returns:
+        account_id if the document exists.
+        None if the document has no associated account.
+
+    Raises:
+        ValueError if the document does not belong to the user.
+    """
+
+    query = """
+        SELECT account_id
+        FROM documents
+        WHERE document_id = %s
+          AND user_id = %s
+    """
+
+    cursor.execute(query, (document_id, user_id))
+    document = cursor.fetchone()
+
+    if document is None:
+        raise ValueError("Document not found for this user.")
+
+    return document[0]
 
 
 def save_transaction(
@@ -12,7 +43,11 @@ def save_transaction(
     credit: float = None,
     balance: float = None,
 ):
-    """Save one extracted transaction in MySQL."""
+    """
+    Save one extracted transaction in MySQL.
+
+    The account_id is automatically inherited from its parent document.
+    """
 
     connection = None
     cursor = None
@@ -29,22 +64,32 @@ def save_transaction(
 
         cursor = connection.cursor()
 
+        # Step 1: Verify document ownership and retrieve account_id.
+        account_id = _get_document_account_id(
+            cursor,
+            document_id,
+            user_id,
+        )
+
+        # Step 2: Insert transaction with inherited account_id.
         query = """
             INSERT INTO transactions (
                 user_id,
                 document_id,
+                account_id,
                 transaction_date,
                 description,
                 debit,
                 credit,
                 balance
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         values = (
             user_id,
             document_id,
+            account_id,
             transaction_date,
             description,
             debit,
@@ -59,9 +104,11 @@ def save_transaction(
             "success": True,
             "message": "Transaction saved successfully.",
             "transaction_id": cursor.lastrowid,
+            "account_id": account_id,
         }
 
-    except Error as error:
+    except (Error, ValueError) as error:
+
         if connection is not None:
             connection.rollback()
 
@@ -72,6 +119,7 @@ def save_transaction(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -84,7 +132,14 @@ def save_transactions(
     document_id: int,
     transactions: list,
 ):
-    """Save multiple validated transactions in MySQL."""
+    """
+    Save multiple validated transactions in MySQL.
+
+    All transactions automatically inherit the account_id
+    of their parent document.
+
+    Existing documents with account_id = NULL are supported.
+    """
 
     if not transactions:
         return {
@@ -108,17 +163,26 @@ def save_transactions(
 
         cursor = connection.cursor()
 
+        # Step 1: Verify document ownership and retrieve account_id.
+        account_id = _get_document_account_id(
+            cursor,
+            document_id,
+            user_id,
+        )
+
+        # Step 2: Prepare transaction insertion query.
         query = """
             INSERT INTO transactions (
                 user_id,
                 document_id,
+                account_id,
                 transaction_date,
                 description,
                 debit,
                 credit,
                 balance
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         # The parser/normalizer uses "date".
@@ -127,6 +191,7 @@ def save_transactions(
             (
                 user_id,
                 document_id,
+                account_id,
                 transaction["date"],
                 transaction["description"],
                 transaction.get("debit"),
@@ -136,6 +201,7 @@ def save_transactions(
             for transaction in transactions
         ]
 
+        # Step 3: Insert all transactions.
         cursor.executemany(query, values)
         connection.commit()
 
@@ -143,9 +209,11 @@ def save_transactions(
             "success": True,
             "message": "Transactions saved successfully.",
             "saved_count": cursor.rowcount,
+            "account_id": account_id,
         }
 
-    except (Error, KeyError, TypeError) as error:
+    except (Error, KeyError, TypeError, ValueError) as error:
+
         if connection is not None:
             connection.rollback()
 
@@ -156,6 +224,7 @@ def save_transactions(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -167,7 +236,11 @@ def list_document_transactions(
     document_id: int,
     user_id: int,
 ):
-    """Retrieve transactions belonging to a specific user's document."""
+    """
+    Retrieve transactions belonging to a specific user's document.
+
+    Includes account_id.
+    """
 
     connection = None
     cursor = None
@@ -189,6 +262,7 @@ def list_document_transactions(
                 transaction_id,
                 user_id,
                 document_id,
+                account_id,
                 transaction_date,
                 description,
                 debit,
@@ -212,6 +286,7 @@ def list_document_transactions(
         }
 
     except Error as error:
+
         return {
             "success": False,
             "message": str(error),
@@ -219,6 +294,7 @@ def list_document_transactions(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -231,7 +307,11 @@ def list_user_transactions(
     limit: int = 100,
     offset: int = 0,
 ):
-    """Retrieve a user's transactions with pagination."""
+    """
+    Retrieve a user's transactions with pagination.
+
+    Includes account_id.
+    """
 
     connection = None
     cursor = None
@@ -253,6 +333,7 @@ def list_user_transactions(
                 transaction_id,
                 user_id,
                 document_id,
+                account_id,
                 transaction_date,
                 description,
                 debit,
@@ -276,6 +357,7 @@ def list_user_transactions(
         }
 
     except Error as error:
+
         return {
             "success": False,
             "message": str(error),
@@ -283,6 +365,7 @@ def list_user_transactions(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 

@@ -1,0 +1,67 @@
+{
+    "pipeline_status": "SUCCESS",
+    "pipeline_error": null,
+    "pdf_path": "C:\\Users\\shaas\\Downloads\\finwell_reconciliation_secondary_complex_dec2026.pdf",
+    "pdf_valid": true,
+    "extracted_characters": 2252,
+    "cleaned_characters": 1774,
+    "document_type": "bank_statement",
+    "parsed_transactions": 13,
+    "normalized_transactions": 13,
+    "validated_transactions": 13,
+    "total_debits": 12666.7,
+    "total_credits": 34095.0,
+    "opening_balance": 30050.0,
+    "closing_balance": 51478.3,
+    "calculated_closing_balance": 51478.3,
+    "balance_difference": null,
+    "running_balance_reconciliation": "PASS",
+    "validation_result": "SUCCESS",
+    "stages": {
+        "PDF Validation": {
+            "status": "PASS",
+            "details": null
+        },
+        "PDF Text Extraction": {
+            "status": "PASS",
+            "details": "Extracted characters: 2252"
+        },
+        "Text Cleaning": {
+            "status": "PASS",
+            "details": "Cleaned characters: 1774"
+        },
+        "Document Classification": {
+            "status": "PASS",
+            "details": "Document type: bank_statement"
+        },
+        "Transaction Parsing": {
+            "status": "PASS",
+            "details": "Parsed transactions: 13"
+        },
+        "Transaction Normalization": {
+            "status": "PASS",
+            "details": "Normalized transactions: 13"
+        },
+        "Transaction Validation": {
+            "status": "PASS",
+            "details": "Validated transactions: 13"
+        },
+        "Financial Summary": {
+            "status": "PASS",
+            "details": "Debits: ₹12,666.70 | Credits: ₹34,095.00"
+        },
+        "Running Balance Reconciliation": {
+            "status": "PASS",
+            "details": "All available transaction balances match."
+        }
+    },
+    "classification_confidence": 0.43,
+    "reconciliation_details": {
+        "checked": true,
+        "status": "PASS",
+        "reason": null,
+        "mismatches": [],
+        "calculated_closing_balance": 51478.3
+    },
+    "completed_at": "2026-11-18T21:38:37.593898"
+}

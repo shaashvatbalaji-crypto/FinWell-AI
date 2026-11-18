@@ -1,0 +1,26 @@
+{
+    "generated_at": "2026-11-18T21:30:01.061967",
+    "summary": {},
+    "stages": [
+        {
+            "stage": "PDF Validation",
+            "status": "PASS",
+            "details": "Executed successfully"
+        },
+        {
+            "stage": "PDF Text Extraction",
+            "status": "PASS",
+            "details": "Executed successfully"
+        },
+        {
+            "stage": "Text Cleaning",
+            "status": "PASS",
+            "details": "Executed successfully"
+        },
+        {
+            "stage": "Pipeline Execution",
+            "status": "FAIL",
+            "details": "TypeError(\"Unsupported PDF extraction output: <class 'dict'>\")"
+        }
+    ]
+}

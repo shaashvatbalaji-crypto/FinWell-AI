@@ -1,4 +1,6 @@
+
 import hashlib
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -6,6 +8,7 @@ from pathlib import Path
 from pdf_extraction.pdf_validator import validate_pdf
 from pdf_extraction.pdf_reader import extract_pdf_text
 from pdf_extraction.document_classifier import classify_document
+
 from preprocessing.text_cleaner import clean_extracted_text
 from preprocessing.transaction_parser import parse_transactions
 from preprocessing.data_normalizer import normalize_transactions
@@ -14,6 +17,8 @@ from preprocessing.data_validator import validate_transactions
 from chroma_pipeline.chunker import chunk_text
 from chroma_pipeline.vector_store import add_document_chunks
 
+from mysql_pipeline.account_storage import get_account_by_id
+
 from mysql_pipeline.document_storage import (
     save_document,
     update_document_status,
@@ -21,18 +26,25 @@ from mysql_pipeline.document_storage import (
 )
 
 from mysql_pipeline.duplicate_detector import check_duplicate_document
-
-from mysql_pipeline.transaction_storage import (
-    save_transactions,
+from mysql_pipeline.transaction_storage import save_transactions
+from reconciliation.ingestion_shadow_service import (
+    analyze_incoming_transactions,
 )
 
 
-# Project root: FinWell_AI/FinWell_AI
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-# Permanent PDF storage directory
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = PROJECT_ROOT / "data" / "uploads"
 
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# FILE UTILITIES
+# ============================================================
 
 def calculate_file_hash(file_path):
     """Calculate the SHA-256 hash of a file."""
@@ -51,7 +63,7 @@ def create_permanent_copy(source_path, user_id):
     Copy a PDF into the user's permanent upload folder.
 
     Returns:
-        dict: success, stored_filename, stored_path, or error message.
+        dict containing success, stored_filename and stored_path.
     """
 
     source_path = Path(source_path)
@@ -60,8 +72,6 @@ def create_permanent_copy(source_path, user_id):
         user_upload_dir = UPLOADS_DIR / f"user_{user_id}"
         user_upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # UUID avoids filename collisions and prevents trusting the
-        # original filename as a storage path.
         unique_filename = f"{uuid.uuid4().hex}.pdf"
         destination_path = user_upload_dir / unique_filename
 
@@ -73,80 +83,270 @@ def create_permanent_copy(source_path, user_id):
             "stored_path": destination_path.resolve(),
         }
 
-    except OSError as error:
+    except OSError:
+        logger.exception(
+            "Could not create permanent PDF copy for user_id=%s",
+            user_id,
+        )
+
         return {
             "success": False,
-            "message": f"Could not store uploaded PDF: {error}",
+            "message": "Could not store the uploaded PDF.",
         }
 
 
-def ingest_document(pdf_path, user_id):
+def _mark_document_failed(document_id, user_id, error):
     """
-    Ingest a PDF into permanent local storage, MySQL, and ChromaDB.
+    Safely attempt to mark a registered document as failed.
 
-    Workflow:
-        Validate
-        -> Hash
-        -> Duplicate check
-        -> Permanent file copy
-        -> MySQL document record
-        -> Extract text
-        -> Clean text
-        -> Classify document
-        -> Save document type
-        -> Chunk text
-        -> Store chunks in ChromaDB
-        -> Parse transactions
-        -> Normalize transactions
-        -> Validate transactions
-        -> Store transactions in MySQL
-        -> Mark document completed
+    The original document record and permanent PDF are retained.
+    """
+
+    if document_id is None:
+        return False
+
+    try:
+        result = update_document_status(
+            document_id=document_id,
+            user_id=user_id,
+            status="failed",
+            error_message=str(error),
+        )
+
+        if not result or not result.get("success"):
+            logger.error(
+                "Could not mark document_id=%s as failed: %s",
+                document_id,
+                result,
+            )
+            return False
+
+        return True
+
+    except Exception:
+        logger.exception(
+            "Exception while marking document_id=%s as failed",
+            document_id,
+        )
+        return False
+
+
+# ============================================================
+# MAIN INGESTION SERVICE
+# ============================================================
+
+def ingest_document(pdf_path, user_id, account_id=None):
+    """
+    Ingest a financial PDF into permanent storage, MySQL and ChromaDB.
+
+    Optional account_id:
+        If supplied, account ownership is validated.
+        If omitted, the document remains unassociated with an account.
+
+    Processing sequence:
+
+        1. Validate account ownership
+        2. Validate PDF
+        3. Calculate SHA-256 hash
+        4. Check duplicate document
+        5. Create permanent PDF copy
+        6. Save document record in MySQL
+        7. Mark document as processing
+        8. Extract PDF text
+        9. Clean extracted text
+        10. Classify document
+        11. Save document type
+        12. Parse transactions
+        13. Normalize transactions
+        14. Validate transactions
+        15. Save valid transactions in MySQL
+        16. Create text chunks
+        17. Store chunks in ChromaDB
+        18. Mark document completed
+
+    Important:
+        MySQL and ChromaDB do not share an atomic transaction.
+        If one storage operation succeeds and a later operation fails,
+        manual or future automated recovery may be required.
     """
 
     source_path = Path(pdf_path)
 
-    # Step 1: Validate the source PDF.
-    validation_result = validate_pdf(str(source_path))
+    document_id = None
+    stored_path = None
 
-    if not validation_result.get("valid"):
+    # Result counters
+    transaction_count = 0
+    valid_transaction_count = 0
+    invalid_transaction_count = 0
+    stored_transaction_count = 0
+    chunk_count = 0
+
+    document_type = "unknown"
+    cleaned_text = ""
+
+    # --------------------------------------------------------
+    # STEP 1: Validate user and optional account
+    # --------------------------------------------------------
+
+    if (
+        not isinstance(user_id, int)
+        or isinstance(user_id, bool)
+        or user_id <= 0
+    ):
+        return {
+            "success": False,
+            "stage": "account_validation",
+            "message": "user_id must be a positive integer.",
+        }
+
+    if account_id is not None:
+
+        if (
+            not isinstance(account_id, int)
+            or isinstance(account_id, bool)
+            or account_id <= 0
+        ):
+            return {
+                "success": False,
+                "stage": "account_validation",
+                "message": "account_id must be a positive integer.",
+                "account_id": account_id,
+            }
+
+        try:
+            account_result = get_account_by_id(
+                user_id=user_id,
+                account_id=account_id,
+            )
+
+            if (
+                not account_result
+                or not account_result.get("success")
+                or not account_result.get("account")
+            ):
+                return {
+                    "success": False,
+                    "stage": "account_validation",
+                    "message": (
+                        "The selected account does not exist "
+                        "or does not belong to this user."
+                    ),
+                    "account_id": account_id,
+                }
+
+        except Exception:
+            logger.exception(
+                "Account ownership validation failed for user_id=%s",
+                user_id,
+            )
+
+            return {
+                "success": False,
+                "stage": "account_validation",
+                "message": "Could not validate the selected account.",
+                "account_id": account_id,
+            }
+
+    # --------------------------------------------------------
+    # STEP 2: Validate PDF
+    # --------------------------------------------------------
+
+    try:
+        pdf_validation_result = validate_pdf(str(source_path))
+
+        if not pdf_validation_result.get("valid"):
+            return {
+                "success": False,
+                "stage": "validation",
+                "message": pdf_validation_result.get(
+                    "error",
+                    "PDF validation failed.",
+                ),
+                "account_id": account_id,
+            }
+
+        page_count = pdf_validation_result.get("total_pages", 0)
+
+    except Exception:
+        logger.exception("PDF validation raised an exception.")
+
         return {
             "success": False,
             "stage": "validation",
-            "message": validation_result.get(
-                "error",
-                "PDF validation failed.",
-            ),
+            "message": "Could not validate the uploaded PDF.",
+            "account_id": account_id,
         }
 
-    # Step 2: Calculate the file hash.
-    file_hash = calculate_file_hash(source_path)
+    # --------------------------------------------------------
+    # STEP 3: Calculate file hash
+    # --------------------------------------------------------
 
-    # Step 3: Check whether this user already uploaded this file.
-    duplicate_result = check_duplicate_document(
-        user_id=user_id,
-        file_hash=file_hash,
-    )
+    try:
+        file_hash = calculate_file_hash(source_path)
 
-    if not duplicate_result.get("success"):
+    except Exception:
+        logger.exception("PDF hashing failed.")
+
+        return {
+            "success": False,
+            "stage": "file_hash",
+            "message": "Could not calculate the PDF file hash.",
+            "account_id": account_id,
+        }
+
+    # --------------------------------------------------------
+    # STEP 4: Duplicate detection
+    # --------------------------------------------------------
+
+    try:
+        duplicate_result = check_duplicate_document(
+            user_id=user_id,
+            file_hash=file_hash,
+        )
+
+        if not duplicate_result.get("success"):
+            return {
+                "success": False,
+                "stage": "duplicate_check",
+                "message": duplicate_result.get(
+                    "message",
+                    "Duplicate check failed.",
+                ),
+                "account_id": account_id,
+            }
+
+        if duplicate_result.get("is_duplicate"):
+            return {
+                "success": False,
+                "stage": "duplicate_check",
+                "is_duplicate": True,
+                "existing_document_id": duplicate_result.get(
+                    "document_id"
+                ),
+                "message": (
+                    "This PDF has already been uploaded by this user."
+                ),
+                "account_id": account_id,
+            }
+
+    except Exception:
+        logger.exception(
+            "Duplicate detection failed for user_id=%s",
+            user_id,
+        )
+
         return {
             "success": False,
             "stage": "duplicate_check",
-            "message": duplicate_result.get(
-                "message",
-                "Duplicate check failed.",
-            ),
+            "message": "Could not check for duplicate documents.",
+            "account_id": account_id,
         }
 
-    if duplicate_result.get("is_duplicate"):
-        return {
-            "success": False,
-            "stage": "duplicate_check",
-            "is_duplicate": True,
-            "existing_document_id": duplicate_result.get("document_id"),
-            "message": "This PDF has already been uploaded by this user.",
-        }
+    # --------------------------------------------------------
+    # STEP 5: Create permanent PDF copy
+    # --------------------------------------------------------
 
-    # Step 4: Copy the PDF to permanent storage.
     storage_result = create_permanent_copy(
         source_path=source_path,
         user_id=user_id,
@@ -160,68 +360,118 @@ def ingest_document(pdf_path, user_id):
                 "message",
                 "Failed to store PDF permanently.",
             ),
+            "account_id": account_id,
         }
 
     stored_filename = storage_result["stored_filename"]
     stored_path = Path(storage_result["stored_path"])
 
-    # Step 5: Save the permanent file path in MySQL.
-    document_result = save_document(
-        user_id=user_id,
-        original_filename=source_path.name,
-        stored_filename=stored_filename,
-        file_path=str(stored_path),
-        file_hash=file_hash,
-        document_type="unknown",
-        page_count=validation_result.get("total_pages", 0),
-    )
+    # --------------------------------------------------------
+    # STEP 6: Register document in MySQL
+    # --------------------------------------------------------
 
-    if not document_result.get("success"):
-        # Avoid leaving an untracked file behind if MySQL insert fails.
-        try:
-            stored_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+    try:
+        document_result = save_document(
+            user_id=user_id,
+            original_filename=source_path.name,
+            stored_filename=stored_filename,
+            file_path=str(stored_path),
+            file_hash=file_hash,
+            document_type="unknown",
+            page_count=page_count,
+            account_id=account_id,
+        )
 
+        if not document_result.get("success"):
+
+            # No document record was successfully registered.
+            # Remove the untracked permanent file.
+            try:
+                stored_path.unlink(missing_ok=True)
+            except OSError:
+                logger.exception(
+                    "Could not remove untracked PDF copy: %s",
+                    stored_path,
+                )
+
+            return {
+                "success": False,
+                "stage": "mysql_document_storage",
+                "message": document_result.get(
+                    "message",
+                    "Failed to save document record.",
+                ),
+                "account_id": account_id,
+            }
+
+        document_id = document_result.get("document_id")
+
+        if not document_id:
+            raise RuntimeError(
+                "Document storage did not return a document ID."
+            )
+
+    except Exception:
+        logger.exception(
+            "Document registration failed for user_id=%s",
+            user_id,
+        )
+
+        # Do not delete the permanent file here: an uncertain database
+        # outcome should not cause us to remove a possibly registered file.
         return {
             "success": False,
             "stage": "mysql_document_storage",
-            "message": document_result.get(
-                "message",
-                "Failed to save document record.",
-            ),
+            "message": "Could not register the document in MySQL.",
+            "account_id": account_id,
         }
 
-    document_id = document_result.get("document_id")
+    # --------------------------------------------------------
+    # STEP 7: Mark document as processing
+    # --------------------------------------------------------
 
-    # Step 6: Mark the document as processing.
-    status_result = update_document_status(
-        document_id=document_id,
-        user_id=user_id,
-        status="processing",
-    )
+    try:
+        status_result = update_document_status(
+            document_id=document_id,
+            user_id=user_id,
+            status="processing",
+        )
 
-    if not status_result.get("success"):
+        if not status_result.get("success"):
+            raise RuntimeError(
+                status_result.get(
+                    "message",
+                    "Could not mark document as processing.",
+                )
+            )
+
+    except Exception as error:
+        logger.exception(
+            "Could not mark document_id=%s as processing",
+            document_id,
+        )
+
+        _mark_document_failed(
+            document_id,
+            user_id,
+            error,
+        )
+
         return {
             "success": False,
             "stage": "mysql_status_update",
             "document_id": document_id,
-            "message": status_result.get(
-                "message",
-                "Failed to mark document as processing.",
-            ),
+            "account_id": account_id,
+            "message": "Could not start document processing.",
         }
 
-    # These values are retained for the final response.
-    transaction_count = 0
-    valid_transaction_count = 0
-    invalid_transaction_count = 0
-    chunk_count = 0
-    document_type = "unknown"
-    cleaned_text = ""
+    # --------------------------------------------------------
+    # STEPS 8-18: Process document
+    # --------------------------------------------------------
 
     try:
-        # Step 7: Extract text from the permanent stored copy.
+
+        # STEP 8: Extract PDF text
         extraction_result = extract_pdf_text(str(stored_path))
 
         if not extraction_result.get("success"):
@@ -240,7 +490,7 @@ def ingest_document(pdf_path, user_id):
                 "OCR is not enabled for scanned PDFs yet."
             )
 
-        # Step 8: Clean extracted text.
+        # STEP 9: Clean extracted text
         cleaning_result = clean_extracted_text(extracted_text)
 
         if not cleaning_result.get("success"):
@@ -256,7 +506,7 @@ def ingest_document(pdf_path, user_id):
         if not cleaned_text.strip():
             raise RuntimeError("No text remained after cleaning.")
 
-        # Step 9: Classify the document.
+        # STEP 10: Classify document
         classification_result = classify_document(cleaned_text)
 
         if not classification_result.get("success"):
@@ -272,7 +522,7 @@ def ingest_document(pdf_path, user_id):
             "unknown",
         )
 
-        # Step 10: Save the detected type in MySQL.
+        # STEP 11: Save document type
         type_result = update_document_type(
             document_id=document_id,
             user_id=user_id,
@@ -287,34 +537,7 @@ def ingest_document(pdf_path, user_id):
                 )
             )
 
-        # Step 11: Create text chunks.
-        chunks = chunk_text(
-            cleaned_text,
-            chunk_size=1000,
-            chunk_overlap=150,
-        )
-
-        if not chunks:
-            raise RuntimeError("No text chunks were created.")
-
-        # Step 12: Store chunks in ChromaDB.
-        chroma_result = add_document_chunks(
-            document_id=document_id,
-            user_id=user_id,
-            chunks=chunks,
-        )
-
-        if not chroma_result.get("success"):
-            raise RuntimeError(
-                chroma_result.get(
-                    "message",
-                    "ChromaDB storage failed.",
-                )
-            )
-
-        chunk_count = chroma_result.get("stored_count", 0)
-
-        # Step 13: Parse transactions from the cleaned text.
+        # STEP 12: Parse transactions
         parsing_result = parse_transactions(cleaned_text)
 
         if not parsing_result.get("success"):
@@ -326,9 +549,10 @@ def ingest_document(pdf_path, user_id):
             )
 
         parsed_transactions = parsing_result.get("transactions", [])
+
         transaction_count = len(parsed_transactions)
 
-        # Step 14: Normalize parsed transactions.
+        # STEP 13: Normalize transactions
         normalization_result = normalize_transactions(
             parsed_transactions
         )
@@ -346,36 +570,91 @@ def ingest_document(pdf_path, user_id):
             [],
         )
 
-        # Step 15: Validate normalized transactions.
-        validation_result = validate_transactions(
+               # ----------------------------------------------------
+        # STEP 14: Validate normalized transactions
+        # ----------------------------------------------------
+
+        transaction_validation_result = validate_transactions(
             normalized_transactions
         )
 
-        if not validation_result.get("success"):
+        if not transaction_validation_result.get("success"):
             raise RuntimeError(
-                validation_result.get(
-                    "error",
+                transaction_validation_result.get(
+                    "message",
                     "Transaction validation failed.",
                 )
             )
 
-        valid_transactions = validation_result.get(
-            "valid_transactions",
-            [],
+        valid_transactions = (
+            transaction_validation_result.get(
+                "valid_transactions",
+                [],
+            )
         )
 
-        invalid_transaction_count = validation_result.get(
-            "invalid_count",
-            0,
+        invalid_transaction_count = (
+            transaction_validation_result.get(
+                "invalid_count",
+                0,
+            )
         )
 
-        valid_transaction_count = validation_result.get(
-            "valid_count",
-            len(valid_transactions),
+        valid_transaction_count = (
+            transaction_validation_result.get(
+                "valid_count",
+                len(valid_transactions),
+            )
         )
 
-        # Step 16: Save validated transactions to MySQL.
+        # ----------------------------------------------------
+        # STEP 14.5: SHADOW RECONCILIATION
+        # ----------------------------------------------------
+        # This stage is read-only.
+        # It does not save reconciliation cases or matches.
+        # Failure here must not interrupt normal ingestion.
+
+        reconciliation_shadow_result = (
+            analyze_incoming_transactions(
+                user_id=user_id,
+                document_id=document_id,
+                account_id=account_id,
+                transactions=valid_transactions,
+            )
+        )
+
+        if not reconciliation_shadow_result.get("success"):
+            logger.warning(
+                "Shadow reconciliation failed for document_id=%s: %s",
+                document_id,
+                reconciliation_shadow_result.get("message"),
+            )
+
+        elif reconciliation_shadow_result.get("skipped"):
+            logger.info(
+                "Shadow reconciliation skipped for document_id=%s: %s",
+                document_id,
+                reconciliation_shadow_result.get("message"),
+            )
+
+        else:
+            logger.info(
+                "Shadow reconciliation completed for document_id=%s. "
+                "Candidates=%s, pairs_checked=%s",
+                document_id,
+                reconciliation_shadow_result.get(
+                    "duplicate_candidate_count",
+                    0,
+                ),
+                reconciliation_shadow_result.get(
+                    "pairs_checked",
+                    0,
+                ),
+            )
+
+        # STEP 15: Store validated transactions in MySQL
         if valid_transactions:
+
             transaction_save_result = save_transactions(
                 user_id=user_id,
                 document_id=document_id,
@@ -390,7 +669,39 @@ def ingest_document(pdf_path, user_id):
                     )
                 )
 
-        # Step 17: Mark document as completed.
+            stored_transaction_count = len(valid_transactions)
+
+        # STEP 16: Create text chunks only after successful
+        # transaction parsing, normalization and validation.
+        chunks = chunk_text(
+            cleaned_text,
+            chunk_size=1000,
+            chunk_overlap=150,
+        )
+
+        if not chunks:
+            raise RuntimeError("No text chunks were created.")
+
+        # STEP 17: Store chunks in ChromaDB
+        chroma_result = add_document_chunks(
+            document_id=document_id,
+            user_id=user_id,
+            chunks=chunks,
+            account_id=account_id,
+        )
+
+        if not chroma_result.get("success"):
+            raise RuntimeError(
+                chroma_result.get(
+                    "message",
+                    "ChromaDB storage failed.",
+                )
+            )
+
+        chunk_count = chroma_result.get("stored_count", 0)
+
+        # STEP 18: Mark document completed only after both
+        # MySQL transaction storage and ChromaDB indexing succeed.
         status_result = update_document_status(
             document_id=document_id,
             user_id=user_id,
@@ -405,42 +716,72 @@ def ingest_document(pdf_path, user_id):
                 )
             )
 
-        # Step 18: Return complete ingestion results.
+        # ----------------------------------------------------
+        # SUCCESS RESPONSE
+        # ----------------------------------------------------
+
+              # ----------------------------------------------------
+        # SUCCESS RESPONSE
+        # ----------------------------------------------------
+
         return {
             "success": True,
             "stage": "completed",
             "message": "Document ingestion completed successfully.",
+
             "document_id": document_id,
             "user_id": user_id,
+            "account_id": account_id,
+
             "filename": source_path.name,
             "stored_filename": stored_filename,
             "file_path": str(stored_path),
+
             "document_type": document_type,
-            "page_count": validation_result.get("total_pages", 0),
+            "page_count": page_count,
             "character_count": len(cleaned_text),
+
             "chunk_count": chunk_count,
+
             "parsed_transaction_count": transaction_count,
             "valid_transaction_count": valid_transaction_count,
             "invalid_transaction_count": invalid_transaction_count,
-            "stored_transaction_count": len(valid_transactions),
+            "stored_transaction_count": stored_transaction_count,
+
+            "reconciliation_shadow": reconciliation_shadow_result,
         }
 
+    # --------------------------------------------------------
+    # FAILURE HANDLING
+    # --------------------------------------------------------
+
     except Exception as error:
-        update_document_status(
+
+        logger.exception(
+            "Document ingestion failed for document_id=%s",
+            document_id,
+        )
+
+        failure_status_updated = _mark_document_failed(
             document_id=document_id,
             user_id=user_id,
-            status="failed",
-            error_message=str(error),
+            error=error,
         )
 
         return {
             "success": False,
             "stage": "processing",
             "document_id": document_id,
+            "user_id": user_id,
+            "account_id": account_id,
+            "filename": source_path.name,
             "file_path": str(stored_path),
-            "message": str(error),
+            "message": "Document processing failed.",
+            "error_detail": str(error),
+            "failure_status_updated": failure_status_updated,
             "parsed_transaction_count": transaction_count,
             "valid_transaction_count": valid_transaction_count,
             "invalid_transaction_count": invalid_transaction_count,
+            "stored_transaction_count": stored_transaction_count,
             "chunk_count": chunk_count,
         }

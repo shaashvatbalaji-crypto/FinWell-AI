@@ -1,0 +1,11 @@
+{
+    "generated_at": "2026-11-18T21:26:54.288370",
+    "summary": {},
+    "stages": [
+        {
+            "stage": "Pipeline Execution",
+            "status": "FAIL",
+            "details": "FileNotFoundError(WindowsPath('data/december_statement.pdf'))"
+        }
+    ]
+}

@@ -2,6 +2,7 @@
 from mysql.connector import Error
 
 from mysql_pipeline.db import get_db_connection
+from mysql_pipeline.account_storage import get_account_by_id
 
 
 def save_document(
@@ -12,12 +13,37 @@ def save_document(
     file_hash: str,
     document_type: str = "unknown",
     page_count: int = 0,
+    account_id: int = None,
 ):
     """
     Save a newly uploaded document record in MySQL.
 
-    MySQL automatically generates and returns the document_id.
+    If account_id is provided:
+        1. Verify that the account exists.
+        2. Verify that the account belongs to the user.
+        3. Store the account_id with the document.
+
+    If account_id is None, the document is saved
+    without an associated account.
     """
+
+    # Step 1: Validate account ownership.
+    if account_id is not None:
+
+        account_result = get_account_by_id(
+            user_id=user_id,
+            account_id=account_id,
+        )
+
+        if not account_result.get("success"):
+            return {
+                "success": False,
+                "message": (
+                    "Invalid account or account does not "
+                    "belong to this user."
+                ),
+                "document_id": None,
+            }
 
     connection = None
     cursor = None
@@ -37,6 +63,7 @@ def save_document(
         query = """
             INSERT INTO documents (
                 user_id,
+                account_id,
                 original_filename,
                 stored_filename,
                 file_path,
@@ -45,11 +72,12 @@ def save_document(
                 page_count,
                 processing_status
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         values = (
             user_id,
+            account_id,
             original_filename,
             stored_filename,
             file_path,
@@ -69,6 +97,7 @@ def save_document(
         }
 
     except Error as error:
+
         if connection is not None:
             connection.rollback()
 
@@ -79,6 +108,7 @@ def save_document(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -87,7 +117,10 @@ def save_document(
 
 
 def get_document_by_id(document_id: int, user_id: int):
-    """Retrieve one document belonging to a specific user."""
+    """
+    Retrieve one document belonging to a specific user.
+    Includes the associated account_id.
+    """
 
     connection = None
     cursor = None
@@ -108,6 +141,7 @@ def get_document_by_id(document_id: int, user_id: int):
             SELECT
                 document_id,
                 user_id,
+                account_id,
                 original_filename,
                 stored_filename,
                 file_path,
@@ -119,7 +153,8 @@ def get_document_by_id(document_id: int, user_id: int):
                 uploaded_at,
                 processed_at
             FROM documents
-            WHERE document_id = %s AND user_id = %s
+            WHERE document_id = %s
+              AND user_id = %s
         """
 
         cursor.execute(query, (document_id, user_id))
@@ -139,6 +174,7 @@ def get_document_by_id(document_id: int, user_id: int):
         }
 
     except Error as error:
+
         return {
             "success": False,
             "message": str(error),
@@ -146,6 +182,7 @@ def get_document_by_id(document_id: int, user_id: int):
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -154,7 +191,10 @@ def get_document_by_id(document_id: int, user_id: int):
 
 
 def list_user_documents(user_id: int):
-    """List documents belonging to a specific user."""
+    """
+    List all documents belonging to a specific user.
+    Includes the associated account_id.
+    """
 
     connection = None
     cursor = None
@@ -174,6 +214,7 @@ def list_user_documents(user_id: int):
         query = """
             SELECT
                 document_id,
+                account_id,
                 original_filename,
                 document_type,
                 page_count,
@@ -196,6 +237,7 @@ def list_user_documents(user_id: int):
         }
 
     except Error as error:
+
         return {
             "success": False,
             "message": str(error),
@@ -203,6 +245,7 @@ def list_user_documents(user_id: int):
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
@@ -220,7 +263,10 @@ def update_document_status(
     Update a document's processing status for its owner.
 
     Allowed statuses:
-    uploaded, processing, completed, failed
+        uploaded
+        processing
+        completed
+        failed
     """
 
     allowed_statuses = {
@@ -293,6 +339,7 @@ def update_document_status(
         }
 
     except Error as error:
+
         if connection is not None:
             connection.rollback()
 
@@ -302,17 +349,22 @@ def update_document_status(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 
         if connection is not None and connection.is_connected():
             connection.close()
+
+
 def update_document_type(
     document_id: int,
     user_id: int,
     document_type: str,
 ):
-    """Update the detected document type for its owner."""
+    """
+    Update the detected document type for its owner.
+    """
 
     allowed_types = {
         "bank_statement",
@@ -369,6 +421,7 @@ def update_document_type(
         }
 
     except Error as error:
+
         if connection is not None:
             connection.rollback()
 
@@ -378,6 +431,7 @@ def update_document_type(
         }
 
     finally:
+
         if cursor is not None:
             cursor.close()
 

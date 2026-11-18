@@ -1,15 +1,38 @@
+
+# Environment variables and secrets
 .env
-__pycache__/
-*.pyc
-venv/
+.env.*
+!.env.example
+
+# Python virtual environments
 .venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# IDE and editor
+.vscode/
+.idea/
+
+# Financial data and uploaded documents
 data/uploads/*
 data/processed/*
 data/chroma_db/*
-!data/**/.gitkeep
-.env
-.venv/
-__pycache__/
-*.pyc
-data/uploads/
-data/chroma_db/
+
+# Preserve folder structure
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
+!data/chroma_db/.gitkeep
+
+# Logs and temporary files
+*.log
+.pytest_cache/
+.mypy_cache/
+
+# OS files
+.DS_Store
+Thumbs.db

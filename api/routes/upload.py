@@ -1,184 +1,246 @@
 
-import uuid
+import logging
+import shutil
+import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 
+from api.auth_dependencies import get_current_user
 from services.ingestion_service import ingest_document
 
 
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TEMP_UPLOAD_DIR = PROJECT_ROOT / "data" / "processed" / "incoming"
+logger = logging.getLogger(__name__)
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+INCOMING_DIR = PROJECT_ROOT / "data" / "processed" / "incoming"
+
+MAX_FILE_SIZE_MB = 20
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+CHUNK_SIZE = 1024 * 1024
 
 
 @router.post("/upload")
-async def upload_financial_document(
-    user_id: int = Form(...),
+async def upload_document(
     file: UploadFile = File(...),
+    account_id: int | None = Form(None),
+    user_id: int = Depends(get_current_user),
 ):
     """
     Upload and process a financial PDF.
 
-    Pipeline:
-    PDF upload -> validation -> extraction -> classification
-    -> chunking -> transaction parsing -> validation
-    -> MySQL storage -> ChromaDB storage
+    user_id is obtained from the verified JWT.
+    account_id remains optional and is validated by ingestion_service.
     """
 
-    # 1. Validate user ID
-    if user_id <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="user_id must be a positive integer.",
-        )
-
-    # 2. Validate filename
-    if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="No filename was provided.",
-        )
-
-    # 3. Accept only PDF files
-    if Path(file.filename).suffix.lower() != ".pdf":
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are accepted.",
-        )
-
-    TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-    temporary_path = TEMP_UPLOAD_DIR / f"{uuid.uuid4().hex}.pdf"
-    file_size = 0
+    temporary_directory = None
 
     try:
-        # 4. Save upload in chunks and enforce the 20 MB limit
+        # 1. Validate authenticated user ID
+        if user_id <= 0:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authenticated user.",
+            )
+
+        # 2. Validate optional account ID
+        if account_id is not None and account_id <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="account_id must be a positive integer.",
+            )
+
+        # 3. Validate uploaded filename
+        if not file.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="No filename was provided.",
+            )
+
+        original_filename = Path(
+            file.filename.replace("\\", "/")
+        ).name
+
+        if not original_filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid filename.",
+            )
+
+        if Path(original_filename).suffix.lower() != ".pdf":
+            raise HTTPException(
+                status_code=400,
+                detail="Only PDF files are supported.",
+            )
+
+        # 4. Prepare temporary upload directory
+        INCOMING_DIR.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        temporary_directory = Path(
+            tempfile.mkdtemp(
+                prefix="upload_",
+                dir=str(INCOMING_DIR),
+            )
+        )
+
+        temporary_path = temporary_directory / original_filename
+
+        # 5. Save upload in chunks and enforce size limit
+        total_size = 0
+
         with temporary_path.open("wb") as destination:
             while True:
-                chunk = await file.read(1024 * 1024)
+                chunk = await file.read(CHUNK_SIZE)
 
                 if not chunk:
                     break
 
-                file_size += len(chunk)
+                total_size += len(chunk)
 
-                if file_size > MAX_FILE_SIZE:
+                if total_size > MAX_FILE_SIZE_BYTES:
                     raise HTTPException(
                         status_code=413,
-                        detail="PDF exceeds the maximum allowed size of 20 MB.",
+                        detail=(
+                            f"File exceeds the "
+                            f"{MAX_FILE_SIZE_MB} MB limit."
+                        ),
                     )
 
                 destination.write(chunk)
 
-        # 5. Reject empty uploads
-        if file_size == 0:
+        if total_size == 0:
             raise HTTPException(
                 status_code=400,
-                detail="The uploaded file is empty.",
+                detail="The uploaded PDF is empty.",
             )
 
-        # 6. Run the ingestion pipeline
+        # 6. Process the document
         result = ingest_document(
             pdf_path=str(temporary_path),
             user_id=user_id,
+            account_id=account_id,
         )
 
-        # 7. Handle duplicate documents
-        if (
-            not result.get("success")
-            and (
-                result.get("is_duplicate")
-                or result.get("stage") in {
-                    "duplicate",
-                    "duplicate_check",
-                }
-            )
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail=result.get(
-                    "message",
-                    "This document has already been uploaded.",
-                ),
+        if not isinstance(result, dict):
+            logger.error(
+                "Unexpected ingestion result for user_id=%s",
+                user_id,
             )
 
-        # 8. Handle other ingestion failures
+            return {
+                "success": False,
+                "message": "The ingestion service returned an invalid response.",
+            }
+
+        # 7. Handle ingestion failure
         if not result.get("success"):
-            raise HTTPException(
-                status_code=422,
-                detail=result.get(
+            return {
+                "success": False,
+                "stage": result.get("stage"),
+                "message": result.get(
                     "message",
-                    "The document could not be processed.",
+                    "Document processing failed.",
                 ),
-            )
+                "document_id": result.get("document_id"),
+                "user_id": user_id,
+                "account_id": account_id,
+                "is_duplicate": result.get("is_duplicate", False),
+                "existing_document_id": result.get(
+                    "existing_document_id"
+                ),
+                "parsed_transaction_count": result.get(
+                    "parsed_transaction_count", 0
+                ),
+                "valid_transaction_count": result.get(
+                    "valid_transaction_count", 0
+                ),
+                "invalid_transaction_count": result.get(
+                    "invalid_transaction_count", 0
+                ),
+                "chunk_count": result.get("chunk_count", 0),
+            }
 
-        # 9. Read transaction counts from the ingestion result.
-        # The ingestion service currently returns
-        # "stored_transaction_count", not "saved_transaction_count".
-        parsed_count = result.get(
-            "parsed_transaction_count",
-            result.get("total_transactions", 0),
+        # 8. Map ingestion result fields
+        parsed_transactions = result.get(
+            "parsed_transaction_count", 0
         )
 
-        valid_count = result.get(
-            "valid_transaction_count",
-            result.get("valid_count", 0),
+        valid_transactions = result.get(
+            "valid_transaction_count", 0
         )
 
-        invalid_count = result.get(
-            "invalid_transaction_count",
-            result.get("invalid_count", 0),
+        invalid_transactions = result.get(
+            "invalid_transaction_count", 0
         )
 
-        saved_count = result.get(
-            "stored_transaction_count",
-            result.get(
-                "saved_transaction_count",
-                result.get("saved_count", 0),
-            ),
+        stored_transactions = result.get(
+            "stored_transaction_count", 0
         )
 
-        # 10. Return successful response
+        # 9. Return successful response
         return {
             "success": True,
-            "message": "Financial document uploaded and processed successfully.",
-            "document": {
-                "document_id": result.get("document_id"),
-                "user_id": result.get("user_id"),
-                "filename": result.get("filename"),
-                "document_type": result.get("document_type"),
-                "page_count": result.get("page_count"),
-                "character_count": result.get("character_count"),
-                "chunk_count": result.get("chunk_count"),
-                "processing_status": result.get("stage"),
-            },
-            "transactions": {
-                "parsed_count": parsed_count,
-                "valid_count": valid_count,
-                "invalid_count": invalid_count,
-                "saved_count": saved_count,
-            },
+            "message": result.get(
+                "message",
+                "Document uploaded and processed successfully.",
+            ),
+            "document_id": result.get("document_id"),
+            "user_id": user_id,
+            "account_id": account_id,
+            "filename": result.get(
+                "filename",
+                original_filename,
+            ),
+            "document_type": result.get("document_type"),
+            "page_count": result.get("page_count", 0),
+            "character_count": result.get("character_count", 0),
+            "chunk_count": result.get("chunk_count", 0),
+            "total_transactions": parsed_transactions,
+            "parsed_transaction_count": parsed_transactions,
+            "valid_transactions": valid_transactions,
+            "invalid_transactions": invalid_transactions,
+            "stored_transactions": stored_transactions,
+            "processing_status": result.get(
+                "stage",
+                "completed",
+            ),
         }
 
     except HTTPException:
-        # Preserve intended HTTP errors such as 400, 409, 413, and 422.
         raise
 
-    except Exception as error:
-        # Unexpected server-side error
+    except Exception:
+        logger.exception(
+            "Unexpected upload error for user_id=%s",
+            user_id,
+        )
+
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected upload error: {str(error)}",
+            detail="An unexpected error occurred while uploading the document.",
         )
 
     finally:
-        # 11. Remove temporary upload file
-        if temporary_path.exists():
-            temporary_path.unlink()
+        if temporary_directory is not None:
+            shutil.rmtree(
+                temporary_directory,
+                ignore_errors=True,
+            )
 
-        # 12. Close uploaded file
-        await file.close()
+        try:
+            await file.close()
+        except Exception:
+            logger.warning("Could not close uploaded file.")

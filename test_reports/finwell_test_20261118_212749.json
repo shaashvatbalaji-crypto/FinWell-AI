@@ -1,0 +1,26 @@
+{
+    "generated_at": "2026-11-18T21:27:49.808178",
+    "summary": {},
+    "stages": [
+        {
+            "stage": "PDF Validation",
+            "status": "PASS",
+            "details": "3 pages | 51901 bytes"
+        },
+        {
+            "stage": "PDF Text Extraction",
+            "status": "PASS",
+            "details": "3 pages extracted"
+        },
+        {
+            "stage": "Transaction Extraction",
+            "status": "SKIP",
+            "details": "No function configured"
+        },
+        {
+            "stage": "Pipeline Execution",
+            "status": "FAIL",
+            "details": "RuntimeError('Transaction parser is not configured')"
+        }
+    ]
+}
