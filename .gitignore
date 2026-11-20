@@ -36,3 +36,6 @@ data/chroma_db/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Generated financial reports
+reports/multi_account_pipeline_report.json
