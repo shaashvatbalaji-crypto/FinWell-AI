@@ -54,6 +54,11 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigateToLogin })
       return;
     }
 
+    if (password.length < 12) {
+      setErrorMsg('Password must be at least 12 characters long.');
+      return;
+    }
+
     if (!agreeTerms) {
       setErrorMsg('You must agree to the Terms of Service to create an account.');
       return;
@@ -156,7 +161,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigateToLogin })
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
+                placeholder="At least 12 characters"
                 className="w-full rounded-xl border border-white/10 bg-finwell-surface pl-10 pr-10 py-2 text-xs text-white placeholder-finwell-dim focus:border-finwell-primary focus:outline-none"
               />
               <button

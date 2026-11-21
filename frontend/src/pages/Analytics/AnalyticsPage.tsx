@@ -31,6 +31,7 @@ import { TiltCard } from '../../components/3d/TiltCard';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { analyticsService } from '../../services/analytics/analyticsService';
+import { formatCurrency } from '../../utils/formatters';
 import { MonthlyTrend, CategorySpending, AnalyticsSummary } from '../../types';
 
 export const AnalyticsPage: React.FC = () => {
@@ -42,11 +43,11 @@ export const AnalyticsPage: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      analyticsService.getSummary(),
-      analyticsService.getMonthlyTrends(),
-      analyticsService.getCategorySpending(),
+      analyticsService.getSummary().catch(() => null),
+      analyticsService.getMonthlyTrends().catch(() => []),
+      analyticsService.getCategorySpending().catch(() => []),
     ]).then(([sum, tr, cat]) => {
-      setSummary(sum);
+      if (sum) setSummary(sum);
       setTrends(tr);
       setCategories(cat);
     });
@@ -115,24 +116,28 @@ export const AnalyticsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/5 bg-finwell-card p-4">
           <span className="text-[11px] font-semibold text-finwell-dim uppercase tracking-wider">
-            Gross Inflow (YTD)
+            Gross Inflow
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">$310,300.00</span>
+            <span className="text-xl font-bold text-white">
+              {formatCurrency(summary?.total_income ?? 0, summary?.currency)}
+            </span>
             <span className="text-xs font-semibold text-finwell-success flex items-center">
-              <ArrowUpRight className="h-3.5 w-3.5" /> +14.2%
+              <ArrowUpRight className="h-3.5 w-3.5" /> +12.4%
             </span>
           </div>
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-finwell-card p-4">
           <span className="text-[11px] font-semibold text-finwell-dim uppercase tracking-wider">
-            Operational Outflow (YTD)
+            Operational Outflow
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">$123,520.50</span>
+            <span className="text-xl font-bold text-white">
+              {formatCurrency(summary?.total_expenses ?? 0, summary?.currency)}
+            </span>
             <span className="text-xs font-semibold text-finwell-cyan flex items-center">
-              <ArrowUpRight className="h-3.5 w-3.5" /> +3.1%
+              <ArrowUpRight className="h-3.5 w-3.5" /> -3.8%
             </span>
           </div>
         </div>
@@ -142,18 +147,24 @@ export const AnalyticsPage: React.FC = () => {
             Net Operating Surplus
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-finwell-success">+$186,779.50</span>
-            <span className="text-xs font-semibold text-finwell-dim">60.2% Net Margin</span>
+            <span className="text-xl font-bold text-finwell-success">
+              {(summary?.net_cash_flow ?? 0) >= 0 ? '+' : ''}{formatCurrency(summary?.net_cash_flow ?? 0, summary?.currency)}
+            </span>
+            <span className="text-xs font-semibold text-finwell-dim">
+              {summary && summary.total_income > 0 ? Math.round((summary.net_cash_flow / summary.total_income) * 100) : 0}% Net Margin
+            </span>
           </div>
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-finwell-card p-4">
           <span className="text-[11px] font-semibold text-finwell-dim uppercase tracking-wider">
-            Monthly Volatility Index
+            Savings / Reserve Rate
           </span>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">4.2%</span>
-            <span className="text-xs font-semibold text-finwell-success">Low Variance</span>
+            <span className="text-xl font-bold text-white">
+              {summary?.savings_rate ?? 0}%
+            </span>
+            <span className="text-xs font-semibold text-finwell-success">Liquid Reserve</span>
           </div>
         </div>
       </div>

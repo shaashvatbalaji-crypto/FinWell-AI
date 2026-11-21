@@ -3,14 +3,14 @@ import {
   UploadCloud,
   FileText,
   CheckCircle2,
-  AlertCircle,
   Clock,
   Sparkles,
   Database,
-  Search,
   ArrowRight,
   FileCheck,
   Cpu,
+  Building,
+  AlertCircle,
 } from 'lucide-react';
 import { TiltCard } from '../../components/3d/TiltCard';
 import { Badge } from '../../components/common/Badge';
@@ -19,13 +19,17 @@ import {
   documentService,
   STAGE_DESCRIPTIONS,
 } from '../../services/documents/documentService';
-import { DocumentRecord, DocumentProcessingStage } from '../../types';
+import { accountService } from '../../services/accounts/accountService';
+import { DocumentRecord, DocumentProcessingStage, Account } from '../../types';
 
 export const DocumentsPage: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadStage, setUploadStage] = useState<DocumentProcessingStage>('uploaded');
   const [uploadPercent, setUploadPercent] = useState<number>(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,26 +43,42 @@ export const DocumentsPage: React.FC = () => {
     { stage: 'ready_for_ai', label: 'Ready for AI', icon: <Sparkles className="h-4 w-4" /> },
   ];
 
-  const loadDocuments = async () => {
-    const list = await documentService.getDocuments();
-    setDocuments(list);
+  const loadData = async () => {
+    try {
+      const [docList, accList] = await Promise.all([
+        documentService.getDocuments().catch(() => []),
+        accountService.getAccounts().catch(() => []),
+      ]);
+      setDocuments(docList);
+      setAccounts(accList);
+    } catch {
+      // Error handled gracefully
+    }
   };
 
   useEffect(() => {
-    loadDocuments();
+    loadData();
   }, []);
 
   const handleFileUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Only PDF financial statements are supported.');
+      return;
+    }
+
+    setUploadError(null);
     setIsUploading(true);
     setUploadPercent(10);
     setUploadStage('uploaded');
 
     try {
-      await documentService.uploadDocument(file, (stage, percent) => {
+      await documentService.uploadDocument(file, selectedAccountId, (stage, percent) => {
         setUploadStage(stage);
         setUploadPercent(percent);
       });
-      await loadDocuments();
+      await loadData();
+    } catch (err: any) {
+      setUploadError(err.message || 'PDF ingestion failed. Verify statement format.');
     } finally {
       setTimeout(() => {
         setIsUploading(false);
@@ -98,6 +118,49 @@ export const DocumentsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Account Association Bar */}
+      <div className="rounded-2xl border border-white/5 bg-finwell-surface/60 p-4 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-finwell-primary/10 p-2.5 text-finwell-primary border border-finwell-primary/20">
+            <Building className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white">Target Financial Account</h4>
+            <p className="text-[11px] text-finwell-dim">
+              Link parsed transactions directly to your registered banking account
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedAccountId ?? ''}
+            onChange={(e) => setSelectedAccountId(e.target.value ? parseInt(e.target.value, 10) : null)}
+            className="rounded-xl border border-white/10 bg-finwell-card px-3.5 py-2 text-xs text-white focus:border-finwell-primary focus:outline-none"
+          >
+            <option value="">Auto-detect / Unlinked Statement</option>
+            {accounts.map((acc) => (
+              <option key={acc.account_id} value={acc.account_id}>
+                {acc.account_name} ({acc.institution_name} • {acc.masked_account_number})
+              </option>
+            ))}
+          </select>
+          {selectedAccountId && (
+            <Badge variant="cyan" size="sm">
+              Account Linked
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Error notification */}
+      {uploadError && (
+        <div className="rounded-xl border border-finwell-danger/30 bg-finwell-danger/10 p-3.5 text-xs text-finwell-danger flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{uploadError}</span>
+        </div>
+      )}
+
       {/* Drag and Drop Upload Zone */}
       <div
         onDragOver={(e) => {
@@ -131,7 +194,7 @@ export const DocumentsPage: React.FC = () => {
           </h3>
           <p className="text-xs text-finwell-muted max-w-md">
             Supports bank statements, credit card logs, and investment disclosures.
-            (Demo simulation — no sensitive banking documents are uploaded to external servers).
+            All statements are parsed into isolated MySQL ledger records and ChromaDB vectors.
           </p>
 
           <Button variant="secondary" size="sm" className="mt-2 pointer-events-none">
@@ -218,7 +281,7 @@ export const DocumentsPage: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-bold text-white">{doc.filename}</h4>
                   <p className="text-xs text-finwell-dim mt-0.5">
-                    {doc.institution_detected} • {(doc.file_size_bytes / 1024 / 1024).toFixed(2)} MB • Period: {doc.statement_period}
+                    {doc.institution_detected} • {(doc.file_size_bytes / 1024 / 1024).toFixed(2)} MB • {doc.statement_period}
                   </p>
                 </div>
               </div>
@@ -235,14 +298,6 @@ export const DocumentsPage: React.FC = () => {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Ready for AI
                   </p>
                 </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => alert(`Document #${doc.document_id} preview is ready for viewer integration.`)}
-                >
-                  Inspect
-                </Button>
               </div>
             </div>
           ))}

@@ -1,966 +1,270 @@
-
 """
-FINWELL AI — COMPLETE PIPELINE TEST
-Version: 2.0
-
-Tests:
-1. PDF validation
-2. PDF text extraction
-3. Text cleaning
-4. Document classification
-5. Transaction parsing
-6. Transaction normalization
-7. Transaction validation
-8. Debit and credit calculation
-9. Running balance reconciliation
-10. JSON report generation
-
-Run:
-    python test_full_pipeline.py
-
-Custom PDF:
-    python test_full_pipeline.py --pdf "C:/path/to/statement.pdf"
+FinWell AI - complete pipeline validation runner.
+This is a test harness only; it does not write to MySQL or ChromaDB.
+Run: python test_full_pipeline.py --pdf "C:/path/to/statement.pdf"
 """
-
 import argparse
 import json
-import sys
+import re
 import traceback
-
 from pathlib import Path
-from datetime import datetime
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 
+from preprocessing.transaction_parser import parse_transactions
+from preprocessing.data_normalizer import normalize_transactions
+from preprocessing.data_validator import validate_transactions
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
-
-DEFAULT_PDF = Path(
-    r"C:\Users\shaas\Downloads\finwell_reconciliation_secondary_complex_dec2026.pdf"
-)
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-REPORT_DIR = PROJECT_ROOT / "reports"
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
-
+ROOT = Path(__file__).resolve().parent
+REPORT_DIR = ROOT / "reports"
+REPORT_DIR.mkdir(exist_ok=True)
 REPORT_PATH = REPORT_DIR / "full_pipeline_report.json"
-
-SUMMARY = {
-    "pipeline_status": "NOT_STARTED",
-    "pipeline_error": None,
-    "pdf_path": None,
-    "pdf_valid": False,
-    "extracted_characters": 0,
-    "cleaned_characters": 0,
-    "document_type": None,
-    "parsed_transactions": 0,
-    "normalized_transactions": 0,
-    "validated_transactions": 0,
-    "total_debits": 0.0,
-    "total_credits": 0.0,
-    "opening_balance": None,
-    "closing_balance": None,
-    "calculated_closing_balance": None,
-    "balance_difference": None,
-    "running_balance_reconciliation": "NOT_CHECKED",
-    "validation_result": None,
-    "stages": {},
-}
-
-
-# ============================================================
-# GENERAL UTILITIES
-# ============================================================
-
-def mark_stage(name, status, details=None):
-
-    SUMMARY["stages"][name] = {
-        "status": status,
-        "details": details,
-    }
-
-    symbol = "[PASS]" if status == "PASS" else (
-        "[FAIL]" if status == "FAIL" else "[INFO]"
-    )
-
-    print(f"{symbol} {name}")
-
-    if details:
-        print(f"       {details}")
-
-
-def to_decimal(value):
-
-    if value is None or value == "":
-        return Decimal("0")
-
-    if isinstance(value, bool):
-        raise ValueError("Boolean cannot be treated as a transaction amount")
-
-    try:
-        if isinstance(value, str):
-            value = (
-                value.replace(",", "")
-                .replace("₹", "")
-                .replace("Rs.", "")
-                .strip()
-            )
-
-        return Decimal(str(value))
-
-    except (InvalidOperation, ValueError):
-        raise ValueError(f"Invalid monetary value: {value!r}")
-
-
-def json_safe(value):
-
-    if isinstance(value, Decimal):
-        return float(value)
-
-    if isinstance(value, Path):
-        return str(value)
-
-    if isinstance(value, Mapping):
-        return {
-            str(key): json_safe(item)
-            for key, item in value.items()
-        }
-
-    if isinstance(value, (list, tuple)):
-        return [json_safe(item) for item in value]
-
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-
-    return str(value)
-
-
-# ============================================================
-# TEXT EXTRACTION FROM MODULE OUTPUTS
-# ============================================================
-
-TEXT_KEYS = (
-    "cleaned_text",
-    "extracted_text",
-    "full_text",
-    "raw_text",
-    "processed_text",
-    "normalized_text",
-    "document_text",
-    "page_text",
-    "text",
-    "content",
-)
+TRANSACTION_AUDIT_PATH = REPORT_DIR / "transaction_audit_report.json"
 
 
 def extract_text(value, depth=0):
-
     if depth > 12:
         raise ValueError("Maximum nested output depth exceeded")
-
     if isinstance(value, str):
         return value
-
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
-
     if isinstance(value, Mapping):
-
-        for key in TEXT_KEYS:
-
+        for key in ("cleaned_text", "extracted_text", "full_text", "raw_text",
+                    "processed_text", "normalized_text", "document_text",
+                    "page_text", "text", "content"):
             if key in value:
-
-                result = extract_text(
-                    value[key],
-                    depth + 1
-                )
-
+                result = extract_text(value[key], depth + 1)
                 if result.strip():
                     return result
-
         if "pages" in value:
+            return extract_text(value["pages"], depth + 1)
+        raise TypeError(f"No recognized text field in {list(value)}")
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return "\n".join(extract_text(item, depth + 1) for item in value)
+    raise TypeError(f"Unsupported text result: {type(value).__name__}")
 
-            result = extract_text(
-                value["pages"],
-                depth + 1
-            )
 
-            if result.strip():
-                return result
+def to_decimal(value):
+    if value is None:
+        return Decimal("0.00")
+    try:
+        result = Decimal(str(value))
+        if not result.is_finite():
+            raise ValueError("Non-finite amount")
+        return result
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"Invalid monetary value: {value!r}") from exc
 
-        raise TypeError(
-            "Dictionary does not contain recognized text fields. "
-            f"Available keys: {list(value.keys())}"
-        )
 
-    if isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
-
-        pieces = []
-
-        for item in value:
-
-            result = extract_text(
-                item,
-                depth + 1
-            )
-
-            if result.strip():
-                pieces.append(result)
-
-        return "\n".join(pieces)
-
-    raise TypeError(
-        f"Unsupported text output: {type(value).__name__}"
+def extract_statement_balance(text, label):
+    # Conservative: accepts label followed by amount on same or next line.
+    pattern = re.compile(
+        rf"{label}\s*[:\-]?\s*(?:₹|â‚¹|Rs\.?\s*)?([\-]?\d[\d,]*(?:\.\d{{1,2}})?)",
+        re.I
     )
+    match = pattern.search(text)
+    if not match:
+        return None
+    return to_decimal(match.group(1).replace(",", ""))
 
 
-# ============================================================
-# TRANSACTION OUTPUT EXTRACTION
-# ============================================================
-
-def extract_transactions(output, stage_name):
-
-    if isinstance(output, list):
-        transactions = output
-
-    elif isinstance(output, Mapping):
-
-        transactions = output.get("transactions")
-
-        if transactions is None:
-            transactions = output.get("data")
-
-        if transactions is None:
-            raise TypeError(
-                f"{stage_name} did not return a transactions/data list. "
-                f"Available keys: {list(output.keys())}"
-            )
-
-    else:
-
-        raise TypeError(
-            f"{stage_name} returned unsupported output: "
-            f"{type(output).__name__}"
-        )
-
-    if not isinstance(transactions, list):
-
-        raise TypeError(
-            f"{stage_name} transactions must be a list"
-        )
-
-    for index, transaction in enumerate(transactions):
-
-        if not isinstance(transaction, Mapping):
-
-            raise TypeError(
-                f"Transaction {index + 1} is not a dictionary"
-            )
-
-    return transactions
-
-
-# ============================================================
-# FINANCIAL CALCULATIONS
-# ============================================================
-
-def calculate_totals(transactions):
-
-    total_debits = Decimal("0")
-    total_credits = Decimal("0")
-
-    for transaction in transactions:
-
-        debit = transaction.get("debit")
-        credit = transaction.get("credit")
-
-        if debit is not None:
-            total_debits += abs(to_decimal(debit))
-
-        if credit is not None:
-            total_credits += abs(to_decimal(credit))
-
-    return (
-        total_debits.quantize(Decimal("0.01")),
-        total_credits.quantize(Decimal("0.01")),
-    )
-
-
-def extract_opening_balance(text):
-
-    """
-    Extract opening balance from common bank statement formats.
-
-    Supports:
-        OPENING BALANCE
-        75,851.00
-
-    Does not guess if the value cannot be identified.
-    """
-
-    import re
-
-    patterns = [
-        r"OPENING\s+BALANCE\s*(?:[:\-]?\s*)"
-        r"(?:₹\s*)?([\d,]+(?:\.\d{1,2})?)",
-
-        r"OPENING\s+BALANCE\s*[\r\n]+"
-        r"\s*(?:₹\s*)?([\d,]+(?:\.\d{1,2})?)",
-    ]
-
-    for pattern in patterns:
-
-        match = re.search(
-            pattern,
-            text,
-            flags=re.IGNORECASE
-        )
-
-        if match:
-            return to_decimal(match.group(1))
-
-    return None
-
-
-def calculate_running_balance(transactions, opening_balance):
-
-    """
-    Check whether each transaction produces its recorded balance.
-
-    Uses:
-        balance_after = previous_balance - debit + credit
-
-    This assumes the statement records debit and credit separately.
-    """
-
+def check_running_balances(transactions, opening_balance, tolerance=Decimal("0.01")):
+    result = {"status": "NOT_CHECKED", "checked_rows": 0, "mismatches": [],
+              "calculated_closing_balance": None, "reason": None}
     if opening_balance is None:
-        return {
-            "checked": False,
-            "status": "NOT_CHECKED",
-            "reason": "Opening balance could not be extracted.",
-            "mismatches": [],
-            "calculated_closing_balance": None,
-        }
+        result["reason"] = "Opening balance not identified."
+        return result
+    if not transactions:
+        result["reason"] = "No validated transactions."
+        return result
+    if not any(t.get("balance") is not None for t in transactions):
+        result["reason"] = "No transaction running balances are available."
+        return result
 
-    current_balance = opening_balance
-    mismatches = []
-
-    for index, transaction in enumerate(transactions):
-
-        debit = transaction.get("debit")
-        credit = transaction.get("credit")
-        recorded_balance = transaction.get("balance")
-
-        debit_amount = (
-            abs(to_decimal(debit))
-            if debit is not None
-            else Decimal("0")
-        )
-
-        credit_amount = (
-            abs(to_decimal(credit))
-            if credit is not None
-            else Decimal("0")
-        )
-
-        current_balance = (
-            current_balance
-            - debit_amount
-            + credit_amount
-        )
-
-        if recorded_balance is not None:
-
-            recorded = to_decimal(recorded_balance)
-
-            difference = abs(
-                current_balance - recorded
-            )
-
-            if difference > Decimal("0.01"):
-
-                mismatches.append({
-                    "transaction_number": index + 1,
-                    "description": transaction.get("description"),
-                    "expected_balance": float(current_balance),
-                    "recorded_balance": float(recorded),
-                    "difference": float(difference),
+    current = opening_balance
+    for idx, tx in enumerate(transactions, start=1):
+        current = current - to_decimal(tx.get("debit")) + to_decimal(tx.get("credit"))
+        recorded = tx.get("balance")
+        if recorded is not None:
+            result["checked_rows"] += 1
+            difference = abs(current - to_decimal(recorded))
+            if difference > tolerance:
+                result["mismatches"].append({
+                    "row": idx, "description": tx.get("description"),
+                    "calculated": str(current), "recorded": str(to_decimal(recorded)),
+                    "difference": str(difference)
                 })
-
-    return {
-        "checked": True,
-        "status": "PASS" if not mismatches else "FAIL",
-        "reason": None,
-        "mismatches": mismatches,
-        "calculated_closing_balance": float(current_balance),
-    }
+    result["calculated_closing_balance"] = str(current)
+    if result["checked_rows"] == 0:
+        result["reason"] = "No rows with recorded balances were checked."
+    else:
+        result["status"] = "PASS" if not result["mismatches"] else "FAIL"
+    return result
 
 
-# ============================================================
-# PIPELINE IMPORTS
-# ============================================================
+def json_safe(obj):
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    return obj
 
-def load_pipeline_modules():
-
-    """
-    Imports based on the module paths used in the previous test.
-
-    These are the project's existing integration points.
-    """
-
-    from pdf_extraction.pdf_validator import validate_pdf
-
-    from pdf_extraction.pdf_reader import extract_pdf_text
-
-    from pdf_extraction.document_classifier import classify_document
-
-    from preprocessing.text_cleaner import clean_extracted_text
-
-    from preprocessing.transaction_parser import parse_transactions
-
-    from preprocessing.data_normalizer import normalize_transactions
-
-    from preprocessing.data_validator import validate_transactions
-
-    return {
-        "validate_pdf": validate_pdf,
-        "extract_pdf_text": extract_pdf_text,
-        "classify_document": classify_document,
-        "clean_extracted_text": clean_extracted_text,
-        "parse_transactions": parse_transactions,
-        "normalize_transactions": normalize_transactions,
-        "validate_transactions": validate_transactions,
-    }
-
-
-# ============================================================
-# MAIN PIPELINE
-# ============================================================
 
 def run_pipeline(pdf_path):
-
-    print("\n" + "=" * 65)
-    print("FINWELL AI — COMPLETE PIPELINE TEST")
-    print("=" * 65)
-
-    SUMMARY["pdf_path"] = str(pdf_path)
-
-    if not pdf_path.exists():
-
-        raise FileNotFoundError(
-            f"PDF file not found: {pdf_path}"
-        )
-
-    modules = load_pipeline_modules()
-
-    # --------------------------------------------------------
-    # STAGE 1: PDF VALIDATION
-    # --------------------------------------------------------
-
-    validation_output = modules["validate_pdf"](
-        str(pdf_path)
-    )
-
-    print("\nPDF validation output:")
-    print(repr(validation_output)[:1000])
-
-    if isinstance(validation_output, Mapping):
-
-        pdf_valid = validation_output.get(
-            "valid",
-            validation_output.get(
-                "is_valid",
-                validation_output.get("success", False)
-            )
-        )
-
-    else:
-
-        pdf_valid = bool(validation_output)
-
-    if not pdf_valid:
-
-        raise ValueError(
-            f"PDF validation failed: {validation_output!r}"
-        )
-
-    SUMMARY["pdf_valid"] = True
-
-    mark_stage(
-        "PDF Validation",
-        "PASS"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 2: PDF TEXT EXTRACTION
-    # --------------------------------------------------------
-
-    extraction_output = modules["extract_pdf_text"](
-        str(pdf_path)
-    )
-
-    extracted_text = extract_text(
-        extraction_output
-    )
-
-    if not extracted_text.strip():
-
-        raise ValueError(
-            "PDF extraction returned empty text"
-        )
-
-    SUMMARY["extracted_characters"] = len(
-        extracted_text
-    )
-
-    mark_stage(
-        "PDF Text Extraction",
-        "PASS",
-        f"Extracted characters: {len(extracted_text)}"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 3: TEXT CLEANING
-    # --------------------------------------------------------
-
-    cleaning_output = modules["clean_extracted_text"](
-        extracted_text
-    )
-
-    print("\nText cleaner output type:")
-    print(type(cleaning_output).__name__)
-
-    if isinstance(cleaning_output, Mapping):
-
-        print(
-            "Text cleaner output keys:",
-            list(cleaning_output.keys())
-        )
-
-        if cleaning_output.get("success") is False:
-
-            raise ValueError(
-                f"Text cleaning failed: "
-                f"{cleaning_output.get('error')}"
-            )
-
-    cleaned_text = extract_text(
-        cleaning_output
-    )
-
-    if not cleaned_text.strip():
-
-        raise ValueError(
-            "Text cleaning returned empty content"
-        )
-
-    SUMMARY["cleaned_characters"] = len(
-        cleaned_text
-    )
-
-    mark_stage(
-        "Text Cleaning",
-        "PASS",
-        f"Cleaned characters: {len(cleaned_text)}"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 4: DOCUMENT CLASSIFICATION
-    # --------------------------------------------------------
-
-    classification_output = modules["classify_document"](
-        cleaned_text
-    )
-
-    print("\nDocument classification:")
-    print(repr(classification_output)[:1000])
-
-    if isinstance(classification_output, Mapping):
-
-        if classification_output.get("success") is False:
-
-            raise ValueError(
-                f"Classification failed: {classification_output}"
-            )
-
-        document_type = classification_output.get(
-            "document_type",
-            classification_output.get(
-                "type",
-                classification_output.get("label")
-            )
-        )
-
-        confidence = classification_output.get(
-            "confidence"
-        )
-
-    else:
-
-        document_type = classification_output
-        confidence = None
-
-    SUMMARY["document_type"] = str(
-        document_type
-    )
-
-    SUMMARY["classification_confidence"] = confidence
-
-    mark_stage(
-        "Document Classification",
-        "PASS",
-        f"Document type: {document_type}"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 5: TRANSACTION PARSING
-    # --------------------------------------------------------
-
-    parsing_output = modules["parse_transactions"](
-        cleaned_text
-    )
-
-    print("\nTransaction parser output type:")
-    print(type(parsing_output).__name__)
-
-    if isinstance(parsing_output, Mapping):
-
-        print(
-            "Parser output keys:",
-            list(parsing_output.keys())
-        )
-
-        if parsing_output.get("success") is False:
-
-            raise ValueError(
-                f"Transaction parsing failed: {parsing_output}"
-            )
-
-    parsed_transactions = extract_transactions(
-        parsing_output,
-        "Transaction parser"
-    )
-
-    SUMMARY["parsed_transactions"] = len(
-        parsed_transactions
-    )
-
-    mark_stage(
-        "Transaction Parsing",
-        "PASS",
-        f"Parsed transactions: {len(parsed_transactions)}"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 6: NORMALIZATION
-    # --------------------------------------------------------
-
-    normalization_output = modules["normalize_transactions"](
-        parsed_transactions
-    )
-
-    if isinstance(normalization_output, Mapping):
-
-        if normalization_output.get("success") is False:
-
-            raise ValueError(
-                f"Normalization failed: {normalization_output}"
-            )
-
-    normalized_transactions = extract_transactions(
-        normalization_output,
-        "Transaction normalizer"
-    )
-
-    SUMMARY["normalized_transactions"] = len(
-        normalized_transactions
-    )
-
-    mark_stage(
-        "Transaction Normalization",
-        "PASS",
-        f"Normalized transactions: {len(normalized_transactions)}"
-    )
-
-    # --------------------------------------------------------
-    # STAGE 7: TRANSACTION VALIDATION
-    # --------------------------------------------------------
-
-    validation_result = modules["validate_transactions"](
-        normalized_transactions
-    )
-
-    print("\nTransaction validation output:")
-    print(repr(validation_result)[:2000])
-
-    if not isinstance(validation_result, Mapping):
-
-        raise TypeError(
-            "Transaction validator must return a dictionary. "
-            f"Received: {type(validation_result).__name__}"
-        )
-
-    if validation_result.get("success") is False:
-
-        raise ValueError(
-            f"Transaction validation failed: {validation_result}"
-        )
-
-    valid_transactions = validation_result.get(
-        "valid_transactions"
-    )
-
-    if not isinstance(valid_transactions, list):
-
-        raise TypeError(
-            "Validator did not return a valid_transactions list"
-        )
-
-    SUMMARY["validated_transactions"] = len(
-        valid_transactions
-    )
-
-    SUMMARY["validation_result"] = "SUCCESS"
-
-    if len(valid_transactions) != len(normalized_transactions):
-
-        raise ValueError(
-            "Transaction count mismatch: "
-            f"{len(normalized_transactions)} normalized, "
-            f"{len(valid_transactions)} validated"
-        )
-
-    mark_stage(
-        "Transaction Validation",
-        "PASS",
-        f"Validated transactions: {len(valid_transactions)}"
-    )
-
-    # Use validated output for subsequent financial calculations.
-    normalized_transactions = valid_transactions
-
-    # --------------------------------------------------------
-    # STAGE 8: FINANCIAL SUMMARY
-    # --------------------------------------------------------
-
-    total_debits, total_credits = calculate_totals(
-        normalized_transactions
-    )
-
-    SUMMARY["total_debits"] = float(
-        total_debits
-    )
-
-    SUMMARY["total_credits"] = float(
-        total_credits
-    )
-
-    opening_balance = extract_opening_balance(
-        cleaned_text
-    )
-
-    SUMMARY["opening_balance"] = (
-        float(opening_balance)
-        if opening_balance is not None
-        else None
-    )
-
-    calculated_closing = None
-
-    if opening_balance is not None:
-
-        calculated_closing = (
-            opening_balance
-            - total_debits
-            + total_credits
-        )
-
-        SUMMARY["calculated_closing_balance"] = float(
-            calculated_closing
-        )
-
-    mark_stage(
-        "Financial Summary",
-        "PASS",
-        (
-            f"Debits: ₹{total_debits:,.2f} | "
-            f"Credits: ₹{total_credits:,.2f}"
-        )
-    )
-
-    # --------------------------------------------------------
-    # STAGE 9: RUNNING BALANCE RECONCILIATION
-    # --------------------------------------------------------
-
-    reconciliation = calculate_running_balance(
-        normalized_transactions,
-        opening_balance
-    )
-
-    SUMMARY["running_balance_reconciliation"] = (
-        reconciliation["status"]
-    )
-
-    SUMMARY["reconciliation_details"] = reconciliation
-
-    SUMMARY["calculated_closing_balance"] = (
-        reconciliation["calculated_closing_balance"]
-    )
-
-    if reconciliation["checked"]:
-
-        closing_balance = (
-            reconciliation["calculated_closing_balance"]
-        )
-
-        SUMMARY["closing_balance"] = closing_balance
-
-        if reconciliation["status"] == "PASS":
-
-            mark_stage(
-                "Running Balance Reconciliation",
-                "PASS",
-                "All available transaction balances match."
-            )
-
-        else:
-
-            mark_stage(
-                "Running Balance Reconciliation",
-                "FAIL",
-                (
-                    f"{len(reconciliation['mismatches'])} "
-                    "balance mismatches detected."
-                )
-            )
-
-    else:
-
-        mark_stage(
-            "Running Balance Reconciliation",
-            "INFO",
-            reconciliation["reason"]
-        )
-
-    # --------------------------------------------------------
-    # FINAL STATUS
-    # --------------------------------------------------------
-
-    SUMMARY["pipeline_status"] = "SUCCESS"
-
-    print("\n" + "=" * 65)
-    print("PIPELINE EXECUTION COMPLETED")
-    print("=" * 65)
-
-    print(f"PDF: {pdf_path.name}")
-
-    print(
-        f"Parsed transactions: "
-        f"{SUMMARY['parsed_transactions']}"
-    )
-
-    print(
-        f"Normalized transactions: "
-        f"{SUMMARY['normalized_transactions']}"
-    )
-
-    print(
-        f"Validated transactions: "
-        f"{SUMMARY['validated_transactions']}"
-    )
-
-    print(
-        f"Total debits: ₹{total_debits:,.2f}"
-    )
-
-    print(
-        f"Total credits: ₹{total_credits:,.2f}"
-    )
-
-    print(
-        "Running balance reconciliation:",
-        SUMMARY["running_balance_reconciliation"]
-    )
-
-    return normalized_transactions
-
-
-# ============================================================
-# REPORT GENERATION
-# ============================================================
-
-def save_report():
-
-    SUMMARY["completed_at"] = datetime.now().isoformat()
-
-    with REPORT_PATH.open(
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            json_safe(SUMMARY),
-            file,
-            indent=4,
-            ensure_ascii=False
-        )
-
-    print(
-        f"\nReport saved: {REPORT_PATH}"
-    )
-
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
-
-def main():
-
-    parser = argparse.ArgumentParser(
-        description="FinWell AI full pipeline test"
-    )
-
-    parser.add_argument(
-        "--pdf",
-        type=str,
-        default=str(DEFAULT_PDF),
-        help="Bank statement PDF path"
-    )
-
-    args = parser.parse_args()
-
-    pdf_path = Path(args.pdf)
+    report = {
+        "pipeline_status": "FAILED", "pdf_path": str(pdf_path),
+        "stages": {}, "parsed_transactions": 0, "normalized_transactions": 0,
+        "validated_transactions": 0, "invalid_transactions": [],
+        "total_debits": "0.00", "total_credits": "0.00",
+        "opening_balance": None, "statement_closing_balance": None,
+        "calculated_closing_balance": None, "running_balance_reconciliation": None
+    }
+
+    def stage(name, status, details=None):
+        report["stages"][name] = {"status": status, "details": details}
+        print(f"[{status}] {name}" + (f" — {details}" if details else ""))
 
     try:
+        if not pdf_path.is_file():
+            raise FileNotFoundError(pdf_path)
 
-        run_pipeline(pdf_path)
+        from pdf_extraction.pdf_validator import validate_pdf
+        from pdf_extraction.pdf_reader import extract_pdf_text
+        from pdf_extraction.document_classifier import classify_document
+        from preprocessing.text_cleaner import clean_extracted_text
+
+        pdf_result = validate_pdf(str(pdf_path))
+        pdf_ok = (pdf_result.get("valid", pdf_result.get("is_valid",
+                   pdf_result.get("success", False))) if isinstance(pdf_result, Mapping)
+                  else bool(pdf_result))
+        if not pdf_ok:
+            raise ValueError(f"PDF validation failed: {pdf_result}")
+        stage("PDF Validation", "PASS")
+
+        extracted = extract_text(extract_pdf_text(str(pdf_path)))
+        if not extracted.strip():
+            raise ValueError("PDF extraction returned no text.")
+        stage("PDF Text Extraction", "PASS", f"{len(extracted)} characters")
+
+        cleaned_output = clean_extracted_text(extracted)
+        if isinstance(cleaned_output, Mapping) and cleaned_output.get("success") is False:
+            raise ValueError(f"Text cleaning failed: {cleaned_output}")
+        cleaned = extract_text(cleaned_output)
+        if not cleaned.strip():
+            raise ValueError("Text cleaner returned empty text.")
+        stage("Text Cleaning", "PASS", f"{len(cleaned)} characters")
+
+        classification = classify_document(cleaned)
+        if isinstance(classification, Mapping):
+            if classification.get("success") is False:
+                raise ValueError(f"Classification failed: {classification}")
+            report["document_type"] = classification.get(
+                "document_type", classification.get("type", classification.get("label"))
+            )
+        else:
+            report["document_type"] = str(classification)
+        stage("Document Classification", "PASS", str(report["document_type"]))
+
+        parsed = parse_transactions(cleaned)
+        if not parsed["success"]:
+            raise ValueError(parsed.get("error") or "Parsing failed.")
+        transactions = parsed["transactions"]
+        report["parsed_transactions"] = len(transactions)
+        # Preserve row-level output so it can be independently audited against the PDF.
+        report["parsed_transaction_details"] = json_safe(transactions)
+        stage("Transaction Parsing", "PASS", f"{len(transactions)} rows")
+
+        normalized_result = normalize_transactions(transactions)
+        normalized = normalized_result["transactions"]
+        report["normalized_transactions"] = len(normalized)
+        report["normalization_errors"] = normalized_result.get("errors", [])
+        report["normalized_transaction_details"] = json_safe(normalized)
+        stage("Transaction Normalization",
+              "PASS" if normalized_result["success"] else "WARN",
+              f"{len(normalized)} rows; {normalized_result['invalid_count']} normalization errors")
+
+        validation = validate_transactions(normalized)
+        valid = validation["valid_transactions"]
+        report["validated_transactions"] = len(valid)
+        report["invalid_transactions"] = json_safe(validation["invalid_transactions"])
+        report["validated_transaction_details"] = json_safe(valid)
+        if not valid:
+            raise ValueError("No valid transactions remain after validation.")
+        stage("Transaction Validation",
+              "PASS" if validation["success"] else "WARN",
+              f"{len(valid)} valid; {validation['invalid_count']} need review")
+
+        debits = sum((to_decimal(t["debit"]) for t in valid), Decimal("0.00"))
+        credits = sum((to_decimal(t["credit"]) for t in valid), Decimal("0.00"))
+        report["total_debits"] = str(debits)
+        report["total_credits"] = str(credits)
+        stage("Financial Totals", "PASS", f"debits={debits}; credits={credits}")
+
+        opening = extract_statement_balance(cleaned, r"OPENING\s+BALANCE")
+        closing = extract_statement_balance(cleaned, r"CLOSING\s+BALANCE")
+        report["opening_balance"] = str(opening) if opening is not None else None
+        report["statement_closing_balance"] = str(closing) if closing is not None else None
+
+        reconciliation = check_running_balances(valid, opening)
+        report["running_balance_reconciliation"] = reconciliation
+        report["calculated_closing_balance"] = reconciliation["calculated_closing_balance"]
+
+        if closing is not None and reconciliation["calculated_closing_balance"] is not None:
+            diff = abs(closing - Decimal(reconciliation["calculated_closing_balance"]))
+            report["closing_balance_difference"] = str(diff)
+            report["statement_closing_balance_check"] = (
+                "PASS" if diff <= Decimal("0.01") else "FAIL"
+            )
+        else:
+            report["statement_closing_balance_check"] = "NOT_CHECKED"
+
+        stage("Running Balance Check", reconciliation["status"],
+              reconciliation.get("reason") or f"{reconciliation['checked_rows']} recorded balances checked")
+        stage("Statement Closing Balance Check", report["statement_closing_balance_check"])
+
+        # A pipeline with rejected/uncertain rows is not an overall PASS.
+        all_checks_pass = (
+            validation["success"]
+            and reconciliation["status"] in ("PASS", "NOT_CHECKED")
+            and report["statement_closing_balance_check"] in ("PASS", "NOT_CHECKED")
+        )
+        report["pipeline_status"] = "PASS" if all_checks_pass else "REVIEW_REQUIRED"
 
     except Exception as exc:
+        report["pipeline_error"] = str(exc)
+        report["traceback"] = traceback.format_exc()
+        stage("Pipeline", "FAIL", str(exc))
 
-        SUMMARY["pipeline_status"] = "FAILED"
-        SUMMARY["pipeline_error"] = repr(exc)
-
-        mark_stage(
-            "Pipeline Execution",
-            "FAIL",
-            repr(exc)
-        )
-
-        traceback.print_exc()
-
-    finally:
-
-        save_report()
-
-    if SUMMARY["pipeline_status"] != "SUCCESS":
-
-        sys.exit(1)
+    # Write a compact, dedicated transaction-level audit file as well as the full report.
+    audit_report = {
+        "pdf_path": str(pdf_path),
+        "pipeline_status": report["pipeline_status"],
+        "parsed_transaction_count": report.get("parsed_transactions", 0),
+        "normalized_transaction_count": report.get("normalized_transactions", 0),
+        "validated_transaction_count": report.get("validated_transactions", 0),
+        "parsed_transactions": report.get("parsed_transaction_details", []),
+        "normalized_transactions": report.get("normalized_transaction_details", []),
+        "validated_transactions": report.get("validated_transaction_details", []),
+        "invalid_transactions": report.get("invalid_transactions", []),
+        "normalization_errors": report.get("normalization_errors", []),
+    }
+    TRANSACTION_AUDIT_PATH.write_text(
+        json.dumps(json_safe(audit_report), indent=2), encoding="utf-8"
+    )
+    REPORT_PATH.write_text(json.dumps(json_safe(report), indent=2), encoding="utf-8")
+    print(f"\nReport saved: {REPORT_PATH}")
+    print(f"Transaction audit saved: {TRANSACTION_AUDIT_PATH}")
+    print(f"Pipeline status: {report['pipeline_status']}")
+    return report
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pdf", type=Path, required=True, help="Path to statement PDF")
+    args = parser.parse_args()
+    run_pipeline(args.pdf)

@@ -39,3 +39,12 @@ Thumbs.db
 
 # Generated financial reports
 reports/multi_account_pipeline_report.json
+
+# Archives
+*.zip
+
+
+# Generated report dumps
+reports/*.json
+unified_reconciliation_report.json
+

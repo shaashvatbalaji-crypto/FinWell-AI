@@ -126,6 +126,7 @@ export interface DocumentRecord {
   institution_detected?: string;
   statement_period?: string;
   validation_status: 'valid' | 'warning' | 'error';
+  account_id?: number | null;
 }
 
 export interface AnalyticsSummary {
@@ -134,6 +135,7 @@ export interface AnalyticsSummary {
   total_expenses: number;
   net_cash_flow: number;
   savings_rate: number;
+  currency?: string;
   comparison_last_month: {
     income_change_percent: number;
     expense_change_percent: number;

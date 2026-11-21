@@ -11,17 +11,23 @@ export const reconciliationService = {
       return [...inMemoryCases];
     }
 
-    const res = await apiClient.request<{
-      success: boolean;
-      cases: ReconciliationCase[];
-    }>('/reconciliation/cases');
-    return res.cases;
+    try {
+      const res = await apiClient.request<{
+        success: boolean;
+        count: number;
+        cases: ReconciliationCase[];
+      }>('/reconciliation/cases');
+      return res.cases || [];
+    } catch (err) {
+      console.error('[FinWell] Error fetching reconciliation cases:', err);
+      throw err;
+    }
   },
 
   async updateCaseStatus(
     caseId: number,
     newStatus: ReconciliationCase['status']
-  ): Promise<ReconciliationCase> {
+  ): Promise<{ case_id: number; status: ReconciliationCase['status'] }> {
     if (apiClient.isMockMode()) {
       await new Promise((r) => setTimeout(r, 400));
       const idx = inMemoryCases.findIndex((c) => c.case_id === caseId);
@@ -30,18 +36,32 @@ export const reconciliationService = {
           ...inMemoryCases[idx],
           status: newStatus,
         };
-        return inMemoryCases[idx];
+        return { case_id: caseId, status: newStatus };
       }
       throw new Error('Case not found');
     }
 
     const res = await apiClient.request<{
       success: boolean;
-      case: ReconciliationCase;
+      match_id: number;
+      new_status: ReconciliationCase['status'];
+      message?: string;
     }>(`/reconciliation/cases/${caseId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus }),
     });
-    return res.case;
+
+    return { case_id: res.match_id, status: res.new_status };
+  },
+
+  async evaluateDryRun(): Promise<any> {
+    if (apiClient.isMockMode()) {
+      await new Promise((r) => setTimeout(r, 500));
+      return { success: true, mode: 'mock_dry_run', writes_performed: false };
+    }
+
+    return await apiClient.request('/reconciliation/evaluate', {
+      method: 'POST',
+    });
   },
 };

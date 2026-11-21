@@ -18,18 +18,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true); // Logged in by default for seamless exploration
-  const [user, setUser] = useState<User | null>(MOCK_USER);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!apiClient.getToken() || apiClient.isMockMode();
+  });
+  const [user, setUser] = useState<User | null>(() => {
+    return authService.getCurrentUser() || (apiClient.isMockMode() ? MOCK_USER : null);
+  });
   const [isMockMode, setIsMockModeState] = useState<boolean>(apiClient.isMockMode());
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check if token exists
     const token = apiClient.getToken();
-    if (token) {
+    const currentUser = authService.getCurrentUser();
+    if (token && currentUser) {
+      setIsAuthenticated(true);
+      setUser(currentUser);
+    } else if (apiClient.isMockMode()) {
       setIsAuthenticated(true);
       setUser(MOCK_USER);
     }
+
+    const handleAuthExpired = () => {
+      setIsAuthenticated(false);
+      setUser(null);
+    };
+
+    window.addEventListener('finwell:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('finwell:auth-expired', handleAuthExpired);
   }, []);
 
   const login = async (credentials: LoginCredentials) => {
@@ -56,6 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     authService.logout();
+    apiClient.setMockMode(false);
     setIsAuthenticated(false);
     setUser(null);
   };
@@ -63,6 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setMockMode = (enabled: boolean) => {
     apiClient.setMockMode(enabled);
     setIsMockModeState(enabled);
+    if (enabled && !user) {
+      setUser(MOCK_USER);
+      setIsAuthenticated(true);
+    }
   };
 
   return (

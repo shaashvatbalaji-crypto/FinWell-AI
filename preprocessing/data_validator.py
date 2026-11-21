@@ -1,129 +1,80 @@
+"""Strict transaction validation for FinWell AI."""
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+CENT = Decimal("0.01")
 
-REQUIRED_FIELDS = ["date", "description"]
 
-
-def validate_date(date_value) -> bool:
-    """Return True if date is a valid YYYY-MM-DD value."""
-
-    if not isinstance(date_value, str):
-        return False
-
+def _decimal(value, field):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"{field} cannot be boolean")
     try:
-        datetime.strptime(date_value, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
+        result = Decimal(str(value))
+        if not result.is_finite():
+            raise ValueError(f"{field} must be finite")
+        return result.quantize(CENT)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"{field} is not a valid monetary amount") from exc
 
 
-def validate_amount(amount_value) -> bool:
-    """Return True if amount is numeric and finite, or None."""
-
-    if amount_value is None:
-        return True
-
-    try:
-        amount = Decimal(str(amount_value))
-        return amount.is_finite()
-    except (InvalidOperation, ValueError):
-        return False
-
-
-def validate_transaction(transaction: dict) -> dict:
-    """Validate one normalized transaction."""
-
-    if not isinstance(transaction, dict):
-        return {
-            "valid": False,
-            "errors": ["Transaction must be a dictionary."]
-        }
-
+def validate_transaction(transaction):
     errors = []
+    if not isinstance(transaction, dict):
+        return False, ["Transaction must be a dictionary."]
 
-    # Required fields
-    for field in REQUIRED_FIELDS:
-        if transaction.get(field) is None or str(transaction.get(field)).strip() == "":
-            errors.append(f"Missing required field: {field}")
+    raw_date = transaction.get("date")
+    try:
+        datetime.strptime(str(raw_date), "%Y-%m-%d")
+    except (TypeError, ValueError):
+        errors.append("date must be a valid YYYY-MM-DD date.")
 
-    # Date format
-    if transaction.get("date") and not validate_date(transaction["date"]):
-        errors.append("Date must use YYYY-MM-DD format and be a valid date.")
+    if not isinstance(transaction.get("description"), str) or not transaction["description"].strip():
+        errors.append("description is required.")
 
-    # Description
-    description = transaction.get("description")
+    values = {}
+    for field in ("debit", "credit", "balance"):
+        try:
+            values[field] = _decimal(transaction.get(field), field)
+        except ValueError as exc:
+            errors.append(str(exc))
+            values[field] = None
 
-    if description is not None and not isinstance(description, str):
-        errors.append("Description must be a string.")
+    debit, credit = values["debit"], values["credit"]
+    if debit is not None and debit < 0:
+        errors.append("debit cannot be negative; use a positive debit amount.")
+    if credit is not None and credit < 0:
+        errors.append("credit cannot be negative; use a positive credit amount.")
+    if debit is not None and credit is not None and debit > 0 and credit > 0:
+        errors.append("Both debit and credit are positive; direction is ambiguous.")
+    if (debit is None or debit == 0) and (credit is None or credit == 0):
+        errors.append("A transaction must have exactly one positive debit or credit amount.")
+    if transaction.get("direction_uncertain"):
+        errors.append("Transaction direction could not be established; manual review required.")
 
-    # Amount fields
-    amount_fields = ["debit", "credit", "balance"]
-
-    for field in amount_fields:
-        value = transaction.get(field)
-
-        if not validate_amount(value):
-            errors.append(f"{field} must be a valid finite number.")
-
-    # Debit and credit should not both be positive
-    debit = transaction.get("debit")
-    credit = transaction.get("credit")
-
-    if validate_amount(debit) and validate_amount(credit):
-        if debit is not None and credit is not None:
-            if debit > 0 and credit > 0:
-                errors.append(
-                    "Debit and credit cannot both be positive "
-                    "for the same transaction."
-                )
-
-    # Debit and credit should not be negative
-    for field in ["debit", "credit"]:
-        value = transaction.get(field)
-
-        if validate_amount(value) and value is not None and value < 0:
-            errors.append(f"{field} cannot be negative.")
-
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors
-    }
+    return not errors, errors
 
 
-def validate_transactions(transactions: list) -> dict:
-    """Validate a list of transactions and separate valid/invalid records."""
-
+def validate_transactions(transactions):
     if not isinstance(transactions, list):
-        return {
-            "success": False,
-            "valid_transactions": [],
-            "invalid_transactions": [],
-            "total_transactions": 0,
-            "error": "Input must be a list."
-        }
+        return {"success": False, "valid_transactions": [],
+                "invalid_transactions": [], "total": 0,
+                "valid_count": 0, "invalid_count": 0,
+                "errors": ["Input must be a list."]}
 
-    valid_transactions = []
-    invalid_transactions = []
-
+    valid, invalid = [], []
     for index, transaction in enumerate(transactions):
-        result = validate_transaction(transaction)
-
-        if result["valid"]:
-            valid_transactions.append(transaction)
+        ok, errors = validate_transaction(transaction)
+        if ok:
+            clean = dict(transaction)
+            clean.pop("direction_uncertain", None)
+            valid.append(clean)
         else:
-            invalid_transactions.append({
-                "index": index,
-                "transaction": transaction,
-                "errors": result["errors"]
-            })
+            invalid.append({"index": index, "transaction": transaction, "errors": errors})
 
-    return {
-        "success": True,
-        "valid_transactions": valid_transactions,
-        "invalid_transactions": invalid_transactions,
-        "total_transactions": len(transactions),
-        "valid_count": len(valid_transactions),
-        "invalid_count": len(invalid_transactions),
-        "error": None
-    }
+    return {"success": len(invalid) == 0, "valid_transactions": valid,
+            "invalid_transactions": invalid, "total": len(transactions),
+            "valid_count": len(valid), "invalid_count": len(invalid),
+            "errors": [f"Row {x['index'] + 1}: {e}"
+                       for x in invalid for e in x["errors"]]}

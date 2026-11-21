@@ -17,6 +17,7 @@ import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
 import { transactionService, TransactionFilters } from '../../services/transactions/transactionService';
+import { formatCurrency } from '../../utils/formatters';
 import { Transaction } from '../../types';
 
 export const TransactionsPage: React.FC = () => {
@@ -190,10 +191,10 @@ export const TransactionsPage: React.FC = () => {
                       {t.account_name || 'Checking Vault'}
                     </td>
                     <td className="py-3 px-3 text-right font-mono text-finwell-danger font-medium whitespace-nowrap">
-                      {t.debit ? `-$${t.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                      {t.debit ? `-${formatCurrency(t.debit, t.currency)}` : '—'}
                     </td>
                     <td className="py-3 px-3 text-right font-mono text-finwell-success font-bold whitespace-nowrap">
-                      {t.credit ? `+$${t.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                      {t.credit ? `+${formatCurrency(t.credit, t.currency)}` : '—'}
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
                       <Badge
@@ -268,7 +269,7 @@ export const TransactionsPage: React.FC = () => {
                     selectedTxn.direction === 'credit' ? 'text-finwell-success' : 'text-white'
                   }`}
                 >
-                  {selectedTxn.direction === 'credit' ? '+' : '-'}${selectedTxn.amount.toFixed(2)} {selectedTxn.currency}
+                  {selectedTxn.direction === 'credit' ? '+' : '-'}{formatCurrency(selectedTxn.amount, selectedTxn.currency)}
                 </p>
               </div>
               <Badge variant={selectedTxn.is_reconciled ? 'success' : 'warning'} size="md">
@@ -295,7 +296,7 @@ export const TransactionsPage: React.FC = () => {
               <div className="rounded-lg bg-finwell-card p-3 border border-white/5">
                 <span className="text-finwell-dim text-[10px] uppercase">Balance After Posting</span>
                 <p className="font-semibold text-white mt-1 font-mono">
-                  {selectedTxn.balance_after ? `$${selectedTxn.balance_after.toFixed(2)}` : 'Calculated'}
+                  {selectedTxn.balance_after ? formatCurrency(selectedTxn.balance_after, selectedTxn.currency) : 'Calculated'}
                 </p>
               </div>
             </div>

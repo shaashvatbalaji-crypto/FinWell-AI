@@ -1,568 +1,326 @@
+"""
+FinWell AI transaction parser.
 
+Designed for bank-statement text extraction where PDF tables may be emitted
+as columnar text (one cell per line) rather than one transaction per line.
+
+Safety rules:
+- Monetary values are Decimal, never float.
+- A transaction row must have a serial number and transaction date(s).
+- Reference IDs are not treated as amounts.
+- When debit/credit cells disappear from extracted text, the transaction
+  amount is classified using the change in consecutive running balances.
+- If direction cannot be established, it is flagged for review.
+"""
 import re
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+CENT = Decimal("0.01")
 
-# ---------------------------------------------------------
-# 1. DATE AND AMOUNT PATTERNS
-# ---------------------------------------------------------
-
-DATE_PATTERN = re.compile(
-    r"^\s*("
-    r"\d{2}[/-]\d{2}[/-]\d{4}"
-    r"|\d{2}-[A-Za-z]{3}-\d{4}"
-    r"|\d{4}-\d{2}-\d{2}"
-    r"|\d{2}[/-]\d{2}[/-]\d{2}"
-    r")\s*(.*)$"
+DATE_RE = re.compile(
+    r"^(?:\d{2}[/-]\d{2}[/-]\d{4}|"
+    r"\d{2}-[A-Za-z]{3}-\d{4}|"
+    r"\d{4}-\d{2}-\d{2}|"
+    r"\d{2}[/-]\d{2}[/-]\d{2})$"
 )
-
-AMOUNT_PATTERN = re.compile(
-    r"^\s*(?:₹|Rs\.?\s*)?"
-    r"(-?\d[\d,]*\.\d{2}|\(\d[\d,]*\.\d{2}\)|—|–|-|\?)"
-    r"\s*$",
-    re.IGNORECASE,
+SERIAL_RE = re.compile(r"^\s*(\d{1,3})\s*$")
+REF_RE = re.compile(r"^[A-Z]{2,8}\d{6,}[A-Z0-9]*$", re.I)
+MONEY_RE = re.compile(
+    r"^(?:₹|â‚¹|Rs\.?\s*)?"
+    r"(?P<value>\(?-?\d[\d,]*(?:\.\d{1,2})?\)?|—|–|-|\?)$",
+    re.I,
 )
-
-EMPTY_AMOUNT_VALUES = {"", "—", "–", "-", "?"}
-
-
-# Statement sections that must not become transactions
-STATEMENT_BOUNDARY_PATTERN = re.compile(
-    r"^(?:"
-    r"CLOSING\s+BALANCE"
-    r"|STATEMENT\s+SUMMARY"
-    r"|TOTAL\s+DEPOSITS"
-    r"|TOTAL\s+WITHDRAWALS"
-    r"|TOTAL\s+CREDITS"
-    r"|TOTAL\s+DEBITS"
-    r"|END\s+OF\s+STATEMENT"
-    r")\b",
-    re.IGNORECASE,
+BOUNDARY_RE = re.compile(
+    r"^(?:OPENING\s+BALANCE|CLOSING\s+BALANCE|STATEMENT\s+SUMMARY|"
+    r"TRANSACTION\s+DETAILS|TOTAL\s+DEPOSITS|TOTAL\s+WITHDRAWALS|"
+    r"TOTAL\s+CREDITS|TOTAL\s+DEBITS|END\s+OF\s+STATEMENT)\b",
+    re.I,
+)
+DEBIT_HINTS = re.compile(
+    r"\b(?:DR|DEBIT|PURCHASE|WDL|WITHDRAWAL|PAYMENT|EMI|BILLPAY|"
+    r"TO SELF|FEE|CHARGES|TRANSFER TO|PAID TO|RECHARGE)\b", re.I
+)
+CREDIT_HINTS = re.compile(
+    r"\b(?:CR|CREDIT|SALARY|DEPOSIT|REFUND|REVERSAL|INTEREST|"
+    r"CASHBACK|TRANSFER FROM|RECEIVED FROM)\b", re.I
 )
 
 
-# ---------------------------------------------------------
-# 2. DATE NORMALIZATION
-# ---------------------------------------------------------
-
-def normalize_date(date_text: str) -> str | None:
-
-    if not isinstance(date_text, str):
+def normalize_date(value):
+    if not isinstance(value, str):
         return None
-
-    date_text = date_text.strip()
-
-    supported_formats = [
-        "%d-%b-%Y",
-        "%d-%m-%Y",
-        "%d/%m/%Y",
-        "%Y-%m-%d",
-        "%d-%m-%y",
-        "%d/%m/%y",
-    ]
-
-    for date_format in supported_formats:
+    value = value.strip()
+    for fmt in (
+        "%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%d/%m/%Y",
+        "%Y-%m-%d", "%d-%m-%y", "%d/%m/%y",
+    ):
         try:
-            parsed_date = datetime.strptime(
-                date_text,
-                date_format
-            )
-
-            return parsed_date.strftime("%Y-%m-%d")
-
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
-
     return None
 
 
-# ---------------------------------------------------------
-# 3. AMOUNT PARSING
-# ---------------------------------------------------------
-
-def parse_amount(amount_text: str | None) -> float | None:
-
-    if amount_text is None:
+def parse_amount(value):
+    if value is None:
         return None
-
-    value = str(amount_text).strip()
-
-    value = value.replace("₹", "")
-
-    value = re.sub(
-        r"Rs\.?",
-        "",
-        value,
-        flags=re.IGNORECASE
-    )
-
-    value = value.replace(",", "").strip()
-
-    if value in EMPTY_AMOUNT_VALUES:
+    text = str(value).strip().replace("₹", "").replace("â‚¹", "")
+    text = re.sub(r"^Rs\.?\s*", "", text, flags=re.I).replace(",", "").strip()
+    if text in {"", "—", "–", "-", "?"}:
         return None
-
-    if value.startswith("(") and value.endswith(")"):
-        value = "-" + value[1:-1]
-
+    paren_negative = text.startswith("(") and text.endswith(")")
+    if paren_negative:
+        text = text[1:-1].strip()
     try:
-        amount = Decimal(value)
-
-        if not amount.is_finite():
+        number = Decimal(text)
+        if paren_negative:
+            number = -abs(number)
+        if not number.is_finite():
             return None
-
-        return float(amount)
-
-    except (ValueError, InvalidOperation):
+        return number.quantize(CENT, rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
         return None
 
 
-# ---------------------------------------------------------
-# 4. LINE IDENTIFICATION
-# ---------------------------------------------------------
-
-def _is_amount_line(line: str) -> bool:
-
-    return bool(
-        AMOUNT_PATTERN.match(line.strip())
-    )
+def _is_money_cell(line):
+    return bool(MONEY_RE.fullmatch(line.strip()))
 
 
-def _parse_amount_line(line: str) -> float | None:
+def _is_reference(line):
+    return bool(REF_RE.fullmatch(line.strip()))
 
-    match = AMOUNT_PATTERN.match(line.strip())
 
-    if not match:
+def _classify_by_balance(amount, balance, previous_balance, description):
+    if amount is None:
+        return None, None, False
+
+    amount = abs(amount)
+    if previous_balance is not None and balance is not None:
+        delta = (balance - previous_balance).quantize(CENT)
+        if delta == -amount:
+            return amount, None, True
+        if delta == amount:
+            return None, amount, True
+        return None, None, False
+
+    debit_hint = bool(DEBIT_HINTS.search(description))
+    credit_hint = bool(CREDIT_HINTS.search(description))
+    if debit_hint and not credit_hint:
+        return amount, None, True
+    if credit_hint and not debit_hint:
+        return None, amount, True
+    return None, None, False
+
+
+def _build_transaction(block, previous_balance):
+    # A valid block starts with a serial number, followed by transaction date.
+    if len(block) < 4 or not SERIAL_RE.fullmatch(block[0]):
         return None
 
-    return parse_amount(match.group(1))
+    date_positions = []
+    for index, item in enumerate(block[1:], start=1):
+        if DATE_RE.fullmatch(item.strip()):
+            normalized = normalize_date(item)
+            if normalized:
+                date_positions.append((index, normalized))
 
+    # This statement has transaction date + value date. Requiring both
+    # prevents statement-period/header dates from becoming transactions.
+    if len(date_positions) < 2:
+        return None
 
-def _is_transaction_date_line(line: str) -> bool:
+    date_index, transaction_date = date_positions[0]
+    second_date_index = date_positions[1][0]
 
-    return bool(
-        DATE_PATTERN.match(line.strip())
-    )
-
-
-def _is_statement_boundary(line: str) -> bool:
-
-    return bool(
-        STATEMENT_BOUNDARY_PATTERN.match(line.strip())
-    )
-
-
-def _is_non_transaction_description(description: str) -> bool:
-
-    return bool(
-        re.search(
-            r"\b(opening|closing)\s+balance\b",
-            description,
-            re.IGNORECASE
-        )
-    )
-
-
-# ---------------------------------------------------------
-# 5. DEBIT / CREDIT CLASSIFICATION
-# ---------------------------------------------------------
-
-def _classify_transaction_amount(
-    transaction_amount: float | None,
-    balance: float | None,
-    previous_balance: float | None,
-    description: str
-) -> tuple[float | None, float | None]:
-
-    debit = None
-    credit = None
-
-    if transaction_amount is None:
-        return debit, credit
-
-    if transaction_amount < 0:
-        debit = abs(transaction_amount)
-
-    elif (
-        previous_balance is not None
-        and balance is not None
-    ):
-
-        if balance < previous_balance:
-            debit = transaction_amount
-
-        elif balance > previous_balance:
-            credit = transaction_amount
-
-        else:
-            # No balance movement: retain description-based inference.
-            if re.search(
-                r"\b(DR|DEBIT|PURCHASE|WDL|WITHDRAWAL|PAYMENT|"
-                r"EMI|BILLPAY|TO SELF|FEE|CHARGES)\b",
-                description,
-                re.IGNORECASE
-            ):
-                debit = transaction_amount
-            else:
-                credit = transaction_amount
-
-    else:
-
+    description_parts = []
+    money_values = []
+    for index, item in enumerate(block[second_date_index + 1:], start=second_date_index + 1):
+        value = item.strip()
+        if not value or _is_reference(value):
+            continue
+        if _is_money_cell(value):
+            money_values.append(parse_amount(value))
+            continue
+        if BOUNDARY_RE.match(value):
+            continue
+        # Exclude repeated page headers, column headings and footers that
+        # can appear between transactions when a PDF spans multiple pages.
         if re.search(
-            r"\b(DR|DEBIT|PURCHASE|WDL|WITHDRAWAL|PAYMENT|"
-            r"EMI|BILLPAY|TO SELF|FEE|CHARGES)\b",
-            description,
-            re.IGNORECASE
+            r"synthetic statement generated|page \d+ of \d+|"
+            r"^meridian crest bank$|^trusted banking|^statement of account$|"
+            r"^account x{2,}|^sr$|^txn date$|^value date$|^description$|"
+            r"^ref no\.?$|^debit \(₹\)$|^credit \(₹\)$|^balance \(₹\)$",
+            value, re.I,
         ):
-            debit = transaction_amount
-
-        else:
-            credit = transaction_amount
-
-    return debit, credit
-
-
-# ---------------------------------------------------------
-# 6. MULTILINE TRANSACTION PARSER
-# ---------------------------------------------------------
-
-def _parse_multiline_rows(lines: list[str]) -> list[dict]:
-    """
-    Parse multiline bank statement transactions.
-
-    Supports:
-    - Date-prefixed transaction rows.
-    - Multiline descriptions.
-    - Separate amount lines.
-    - Transaction amount + running balance.
-    - Debit/credit inference using balance movement.
-    - Statement section boundaries.
-
-    Existing transaction output structure is preserved.
-    """
-
-    transactions = []
-
-    index = 0
-
-    previous_balance = None
-
-    while index < len(lines):
-
-        current_line = lines[index].strip()
-
-        # Ignore non-date lines outside transactions.
-        if not _is_transaction_date_line(current_line):
-            index += 1
             continue
+        description_parts.append(value)
 
-        date_match = DATE_PATTERN.match(current_line)
+    description = " ".join(description_parts).strip()
+    if not description or not money_values:
+        return None
 
-        date_text = date_match.group(1)
-        remainder = date_match.group(2).strip()
+    # The final monetary cell is the running balance. In this PDF, blank
+    # debit/credit cells are omitted by text extraction, leaving:
+    # [transaction amount, running balance].
+    balance = money_values[-1]
+    debit = credit = None
+    certain = False
 
-        normalized_date = normalize_date(date_text)
-
-        if not normalized_date:
-            index += 1
-            continue
-
-        index += 1
-
-        # Some statements repeat the transaction date as a separate
-        # value-date line. Skip it only when it is an identical,
-        # standalone date immediately following the transaction date.
-        if index < len(lines):
-            repeated_date_match = DATE_PATTERN.match(
-                lines[index].strip()
-            )
-
-            if (
-                repeated_date_match
-                and not repeated_date_match.group(2).strip()
-                and normalize_date(repeated_date_match.group(1))
-                == normalized_date
-            ):
-                index += 1
-
-        description_parts = []
-        amounts = []
-
-        if remainder:
-
-            if _is_amount_line(remainder):
-
-                amounts.append(
-                    _parse_amount_line(remainder)
-                )
-
-            else:
-
-                description_parts.append(remainder)
-
-       
-        # Collect transaction description and amount lines.
-        while index < len(lines):
-
-            current_line = lines[index].strip()
-
-            # Next transaction starts.
-            if _is_transaction_date_line(current_line):
-                break
-
-            # Statement summary or closing balance starts.
-            if _is_statement_boundary(current_line):
-                break
-
-            if _is_amount_line(current_line):
-
-                amounts.append(
-                    _parse_amount_line(current_line)
-                )
-
-                index += 1
-
-                # Three-column statements:
-                # Debit, Credit, Balance.
-                if len(amounts) >= 3:
-                    break
-
-            else:
-
-                # Once transaction amount and balance have
-                # been collected, stop before appending
-                # unrelated footer/header information.
-                #
-                # A third amount is still accepted above for
-                # Debit/Credit/Balance statement formats.
-                if len(amounts) >= 2:
-                    break
-
-                if current_line:
-                    description_parts.append(current_line)
-
-                index += 1
-
-
-        description = " ".join(
-            description_parts
-        ).strip()
-
-        if not description or not amounts:
-            continue
-
-        if _is_non_transaction_description(description):
-            continue
-
-        debit = None
-        credit = None
-        balance = None
-
-        # Three amounts:
-        # Debit, Credit, Balance
-        if len(amounts) >= 3:
-
-            debit = amounts[0]
-            credit = amounts[1]
-            balance = amounts[2]
-
-        # Two amounts:
-        # Transaction amount + Balance
-        elif len(amounts) == 2:
-
-            transaction_amount = amounts[0]
-            balance = amounts[1]
-
-            debit, credit = _classify_transaction_amount(
-                transaction_amount,
-                balance,
-                previous_balance,
-                description
-            )
-
-        # One amount:
-        # Transaction amount only
-        elif len(amounts) == 1:
-
-            transaction_amount = amounts[0]
-
-            debit, credit = _classify_transaction_amount(
-                transaction_amount,
-                None,
-                previous_balance,
-                description
-            )
-
-        transactions.append({
-            "date": normalized_date,
-            "description": description,
-            "debit": debit,
-            "credit": credit,
-            "balance": balance,
-        })
-
-        if balance is not None:
-            previous_balance = balance
-
-    return transactions
-
-
-# ---------------------------------------------------------
-# 7. SINGLE-LINE TRANSACTION PARSER
-# ---------------------------------------------------------
-
-def _parse_single_line_rows(lines: list[str]) -> list[dict]:
-
-    transactions = []
-
-    previous_balance = None
-
-    for line in lines:
-
-        line = line.strip()
-
-        if not _is_transaction_date_line(line):
-            continue
-
-        date_match = DATE_PATTERN.match(line)
-
-        date_text = date_match.group(1)
-        remainder = date_match.group(2).strip()
-
-        normalized_date = normalize_date(date_text)
-
-        if not normalized_date or not remainder:
-            continue
-
-        amount_matches = re.findall(
-            r"(?<!\w)(?:₹|Rs\.?\s*)?"
-            r"(-?\d[\d,]*\.\d{2}|\(\d[\d,]*\.\d{2}\)|—|–|-|\?)",
-            remainder,
-            flags=re.IGNORECASE
+    if len(money_values) >= 3:
+        # Explicit Debit, Credit, Balance columns when all cells are present.
+        debit_value, credit_value, balance = money_values[-3:]
+        debit = abs(debit_value) if debit_value is not None and debit_value != 0 else None
+        credit = abs(credit_value) if credit_value is not None and credit_value != 0 else None
+        certain = (debit is None) != (credit is None)
+    elif len(money_values) >= 2:
+        transaction_amount = money_values[-2]
+        debit, credit, certain = _classify_by_balance(
+            transaction_amount, balance, previous_balance, description
         )
+    else:
+        # A lone amount cannot be safely interpreted as both transaction and balance.
+        return None
 
-        if not amount_matches:
+    return {
+        "date": transaction_date,
+        "description": description,
+        "debit": debit,
+        "credit": credit,
+        "balance": balance,
+        "direction_uncertain": not certain,
+    }
+
+
+def _parse_serial_blocks(lines):
+    transactions = []
+    previous_balance = None
+    current_block = []
+
+    def flush():
+        nonlocal previous_balance
+        if not current_block:
+            return
+        tx = _build_transaction(current_block, previous_balance)
+        if tx is not None:
+            transactions.append(tx)
+            if tx["balance"] is not None:
+                previous_balance = tx["balance"]
+        current_block.clear()
+
+    for raw in lines:
+        line = raw.strip()
+        if not line:
             continue
 
-        amounts = [
-            parse_amount(value)
-            for value in amount_matches
+        if SERIAL_RE.fullmatch(line):
+            flush()
+            current_block.append(line)
+            continue
+
+        if BOUNDARY_RE.match(line):
+            flush()
+            continue
+
+        if current_block:
+            current_block.append(line)
+
+    flush()
+    return transactions
+
+
+def _parse_inline_serial_rows(lines):
+    """Fallback for extractors that put an entire numbered row on one line."""
+    transactions = []
+    previous_balance = None
+
+    for raw in lines:
+        line = raw.strip()
+        match = re.match(r"^(\d{1,3})\s+(.+)$", line)
+        if not match:
+            continue
+        remainder = match.group(2)
+        tokens = re.split(r"\s{2,}|\s+\|\s+", remainder)
+        # Parse only if at least two date tokens are explicitly present.
+        date_tokens = [normalize_date(token.strip()) for token in tokens]
+        valid_dates = [d for d in date_tokens if d]
+        if len(valid_dates) < 2:
+            continue
+
+        date_positions = [
+            i for i, token in enumerate(tokens)
+            if normalize_date(token.strip())
         ]
+        tail = tokens[date_positions[1] + 1:]
+        desc_parts, money = [], []
+        for token in tail:
+            token = token.strip()
+            if _is_reference(token):
+                continue
+            if _is_money_cell(token):
+                money.append(parse_amount(token))
+            elif token:
+                desc_parts.append(token)
 
-        description = remainder
-
-        for amount_text in reversed(amount_matches):
-
-            description = re.sub(
-                re.escape(amount_text) + r"\s*$",
-                "",
-                description,
-                count=1
-            ).strip()
-
-        if not description:
+        if len(money) < 2:
             continue
-
-        if _is_non_transaction_description(description):
-            continue
-
-        debit = None
-        credit = None
-        balance = None
-
-        if len(amounts) >= 3:
-
-            debit = amounts[-3]
-            credit = amounts[-2]
-            balance = amounts[-1]
-
-        elif len(amounts) == 2:
-
-            transaction_amount = amounts[-2]
-            balance = amounts[-1]
-
-            debit, credit = _classify_transaction_amount(
-                transaction_amount,
-                balance,
-                previous_balance,
-                description
-            )
-
-        elif len(amounts) == 1:
-
-            transaction_amount = amounts[0]
-
-            debit, credit = _classify_transaction_amount(
-                transaction_amount,
-                None,
-                previous_balance,
-                description
-            )
-
-        transactions.append({
-            "date": normalized_date,
-            "description": description,
+        balance = money[-1]
+        debit, credit, certain = _classify_by_balance(
+            money[-2], balance, previous_balance, " ".join(desc_parts)
+        )
+        tx = {
+            "date": valid_dates[0],
+            "description": " ".join(desc_parts).strip(),
             "debit": debit,
             "credit": credit,
             "balance": balance,
-        })
-
-        if balance is not None:
+            "direction_uncertain": not certain,
+        }
+        if tx["description"]:
+            transactions.append(tx)
             previous_balance = balance
 
     return transactions
 
 
-# ---------------------------------------------------------
-# 8. MAIN TRANSACTION PARSER
-# ---------------------------------------------------------
-
-def parse_transactions(text: str) -> dict:
-
-    if not isinstance(text, str):
-
+def parse_transactions(text):
+    if not isinstance(text, str) or not text.strip():
         return {
             "success": False,
             "transactions": [],
             "total_transactions": 0,
-            "error": "Input must be a string."
-        }
-
-    if not text.strip():
-
-        return {
-            "success": False,
-            "transactions": [],
-            "total_transactions": 0,
-            "error": "Input text is empty."
+            "uncertain_direction_count": 0,
+            "error": "Input text must be a non-empty string.",
         }
 
     try:
-
-        lines = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip()
-        ]
-
-        transactions = _parse_multiline_rows(lines)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        transactions = _parse_serial_blocks(lines)
+        if not transactions:
+            transactions = _parse_inline_serial_rows(lines)
 
         if not transactions:
+            return {
+                "success": False,
+                "transactions": [],
+                "total_transactions": 0,
+                "uncertain_direction_count": 0,
+                "error": "No numbered transaction rows could be parsed; review statement layout.",
+            }
 
-            transactions = _parse_single_line_rows(lines)
-
+        uncertain = sum(bool(tx["direction_uncertain"]) for tx in transactions)
         return {
             "success": True,
             "transactions": transactions,
             "total_transactions": len(transactions),
-            "error": None
+            "uncertain_direction_count": uncertain,
+            "error": None,
         }
-
-    except Exception as error:
-
+    except Exception as exc:
         return {
             "success": False,
             "transactions": [],
             "total_transactions": 0,
-            "error": str(error)
+            "uncertain_direction_count": 0,
+            "error": str(exc),
         }

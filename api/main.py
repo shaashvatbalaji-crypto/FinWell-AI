@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.upload import router as upload_router
 from api.routes.documents import router as documents_router
@@ -6,6 +7,8 @@ from api.routes.auth import router as auth_router
 from api.routes.transactions import router as transactions_router
 from api.routes.accounts import router as accounts_router
 from api.routes.analytics import router as analytics_router
+from api.routes.ai import router as ai_router
+from api.routes.reconciliation import router as reconciliation_router
 
 
 app = FastAPI(
@@ -13,6 +16,15 @@ app = FastAPI(
     description="Backend API for financial document ingestion and retrieval.",
     version="1.0.0",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 @app.get("/", tags=["Health"])
@@ -70,4 +82,12 @@ app.include_router(
     analytics_router,
     prefix="/api",
     tags=["Financial Analytics"],
+)
+
+app.include_router(ai_router, prefix="/api", tags=["AI Assistant"])
+
+app.include_router(
+    reconciliation_router,
+    prefix="/api",
+    tags=["Reconciliation"],
 )

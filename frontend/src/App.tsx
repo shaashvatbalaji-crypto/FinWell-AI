@@ -24,9 +24,14 @@ import { ForgotPasswordPage } from './pages/ForgotPassword/ForgotPasswordPage';
 type AuthView = 'login' | 'register' | 'forgot-password';
 
 const MainAppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<NavigationPage>('dashboard');
   const [authView, setAuthView] = useState<AuthView>('login');
+
+  const handleRegisterNewUser = () => {
+    logout();
+    setAuthView('register');
+  };
 
   // If unauthenticated, show auth flow
   if (!isAuthenticated) {
@@ -64,14 +69,18 @@ const MainAppContent: React.FC = () => {
       case 'reports':
         return <ReportsPage />;
       case 'settings':
-        return <SettingsPage />;
+        return <SettingsPage onRegisterNewUser={handleRegisterNewUser} />;
       default:
         return <DashboardPage onNavigate={setCurrentPage} />;
     }
   };
 
   return (
-    <AppLayout currentPage={currentPage} onSelectPage={setCurrentPage}>
+    <AppLayout
+      currentPage={currentPage}
+      onSelectPage={setCurrentPage}
+      onRegisterNewUser={handleRegisterNewUser}
+    >
       {renderCurrentPage()}
     </AppLayout>
   );

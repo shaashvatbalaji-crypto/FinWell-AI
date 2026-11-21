@@ -3,12 +3,12 @@
 // Routes requests to real FastAPI endpoints or mock data
 // ==========================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
-  private mockMode: boolean = true;
+  private mockMode: boolean = false;
 
   constructor() {
     this.baseURL = API_BASE_URL;
@@ -20,8 +20,8 @@ class ApiClient {
       this.token = savedToken;
     }
     
-    // Default to mockMode = true for standalone evaluation
-    this.mockMode = savedMockPref !== null ? savedMockPref === 'true' : true;
+    // Default to mockMode = false when connecting real backend
+    this.mockMode = savedMockPref !== null ? savedMockPref === 'true' : false;
   }
 
   public getBaseURL(): string {
@@ -58,11 +58,15 @@ class ApiClient {
   public async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       Accept: 'application/json',
       ...(options.headers as Record<string, string>),
     };
+
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -75,8 +79,23 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          this.setToken(null);
+          localStorage.removeItem('finwell_user');
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('finwell:auth-expired'));
+          }
+        }
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+        let message = `Request failed with status ${response.status}`;
+        if (typeof errorData.detail === 'string') {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData.detail)) {
+          message = errorData.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ');
+        } else if (errorData.message) {
+          message = errorData.message;
+        }
+        throw new Error(message);
       }
 
       return (await response.json()) as T;

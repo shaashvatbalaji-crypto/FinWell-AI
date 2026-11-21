@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  LogOut,
+  UserPlus,
+  Plus,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -34,6 +37,7 @@ interface LeftSidebarProps {
   onSelectPage: (page: NavigationPage) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  onRegisterNewUser?: () => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -41,9 +45,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onSelectPage,
   isCollapsed,
   onToggleCollapse,
+  onRegisterNewUser,
 }) => {
   const { mode, toggleMode } = useTheme();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const navItems: { id: NavigationPage; label: string; icon: React.ReactNode; isAI?: boolean }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
@@ -99,7 +104,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </button>
         </div>
 
-        {/* User Profile Card (Faithful to NeuroBank Reference) */}
+        {/* User Profile Card with Logout & Theme Controls */}
         {!isCollapsed ? (
           <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-finwell-card/90 p-3.5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -112,40 +117,50 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-finwell-success ring-2 ring-finwell-card" />
               </div>
 
-              {/* Theme Toggle Pill */}
-              <button
-                onClick={toggleMode}
-                className="flex items-center gap-1 rounded-full border border-white/10 bg-finwell-surface p-1 text-xs text-finwell-muted hover:text-white transition-colors"
-                title="Toggle Theme"
-              >
-                <div
-                  className={`rounded-full p-1 ${
-                    mode === 'dark' ? 'bg-finwell-primary text-white shadow-glow-sm' : 'text-finwell-dim'
-                  }`}
+              {/* Theme Toggle Pill & Logout Button */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={toggleMode}
+                  className="flex items-center gap-1 rounded-full border border-white/10 bg-finwell-surface p-1 text-xs text-finwell-muted hover:text-white transition-colors"
+                  title="Toggle Theme"
                 >
-                  <Moon className="h-3 w-3" />
-                </div>
-                <div
-                  className={`rounded-full p-1 ${
-                    mode === 'light' ? 'bg-finwell-primary text-white shadow-glow-sm' : 'text-finwell-dim'
-                  }`}
+                  <div
+                    className={`rounded-full p-1 ${
+                      mode === 'dark' ? 'bg-finwell-primary text-white shadow-glow-sm' : 'text-finwell-dim'
+                    }`}
+                  >
+                    <Moon className="h-3 w-3" />
+                  </div>
+                  <div
+                    className={`rounded-full p-1 ${
+                      mode === 'light' ? 'bg-finwell-primary text-white shadow-glow-sm' : 'text-finwell-dim'
+                    }`}
+                  >
+                    <Sun className="h-3 w-3" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={logout}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-finwell-surface text-finwell-muted hover:border-finwell-danger/50 hover:bg-finwell-danger/10 hover:text-finwell-danger transition-all"
+                  title="Log Out of FinWell AI"
                 >
-                  <Sun className="h-3 w-3" />
-                </div>
-              </button>
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-finwell-dim">
-                MONDAY, MARCH 24
+              <p className="text-[10px] font-bold uppercase tracking-wider text-finwell-dim truncate">
+                {user?.email || 'ACTIVE SESSION'}
               </p>
-              <h4 className="text-sm font-bold text-white mt-0.5">
-                Welcome back, {user?.full_name?.split(' ')[0] || 'George'}!
+              <h4 className="text-sm font-bold text-white mt-0.5 truncate">
+                {user?.full_name || user?.username || 'User'}
               </h4>
             </div>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-2">
             <div className="relative">
               <img
                 src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80'}
@@ -154,6 +169,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               />
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-finwell-success ring-2 ring-finwell-card" />
             </div>
+            <button
+              onClick={logout}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-finwell-surface text-finwell-muted hover:text-finwell-danger hover:border-finwell-danger/50 transition-colors"
+              title="Log Out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
@@ -188,43 +210,104 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 {isActive && !isCollapsed && (
                   <span className="h-1.5 w-1.5 rounded-full bg-finwell-cyan shadow-[0_0_8px_#20D9F2]" />
                 )}
+
+                {/* Quick Add Bank Vault Shortcut on Accounts Item */}
+                {item.id === 'accounts' && !isCollapsed && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectPage('accounts');
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-finwell-dim hover:text-finwell-cyan hover:bg-white/10 rounded transition-opacity"
+                    title="Add Financial Account"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
       </div>
 
-      {/* Bottom Promo Card (Inspired by reference "Activate NeuroBank Pro") */}
-      {!isCollapsed ? (
-        <div className="relative mt-6 overflow-hidden rounded-2xl border border-finwell-primary/30 bg-gradient-to-br from-finwell-primary/30 via-finwell-surface to-finwell-card p-4 shadow-glow-sm">
-          <div className="flex items-start gap-3">
-            <div className="rounded-lg bg-finwell-primary/20 p-2 text-finwell-cyan">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
-                FinWell Pro AI
-                <span className="rounded bg-finwell-cyan/20 px-1 py-0.5 text-[9px] font-semibold text-finwell-cyan">
-                  ACTIVE
-                </span>
-              </h5>
-              <p className="mt-1 text-[11px] text-finwell-muted leading-relaxed">
-                Elevate personal finance with autonomous reconciliation & Qwen 2.5 intelligence.
-              </p>
+      {/* Bottom Section: User Session Actions & Promo Card */}
+      <div className="space-y-4">
+        {/* User Account & Session Actions */}
+        {!isCollapsed ? (
+          <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+            {onRegisterNewUser && (
+              <button
+                onClick={onRegisterNewUser}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs font-semibold text-finwell-muted hover:border-finwell-primary/40 hover:bg-finwell-primary/10 hover:text-white transition-all shadow-sm"
+                title="Create a new user account"
+              >
+                <UserPlus className="h-3.5 w-3.5 text-finwell-cyan" />
+                <span>New User</span>
+              </button>
+            )}
+
+            <button
+              onClick={logout}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs font-semibold text-finwell-muted hover:border-finwell-danger/40 hover:bg-finwell-danger/10 hover:text-finwell-danger transition-all shadow-sm"
+              title="Sign Out of Session"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Log Out</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 pt-2 border-t border-white/5">
+            {onRegisterNewUser && (
+              <button
+                onClick={onRegisterNewUser}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-finwell-cyan hover:bg-finwell-primary/10 transition-colors"
+                title="Create New User Account"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              onClick={logout}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-finwell-muted hover:text-finwell-danger transition-colors"
+              title="Log Out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Promo Card */}
+        {!isCollapsed ? (
+          <div className="relative overflow-hidden rounded-2xl border border-finwell-primary/30 bg-gradient-to-br from-finwell-primary/30 via-finwell-surface to-finwell-card p-4 shadow-glow-sm">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-finwell-primary/20 p-2 text-finwell-cyan">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  FinWell Pro AI
+                  <span className="rounded bg-finwell-cyan/20 px-1 py-0.5 text-[9px] font-semibold text-finwell-cyan">
+                    ACTIVE
+                  </span>
+                </h5>
+                <p className="mt-1 text-[11px] text-finwell-muted leading-relaxed">
+                  Elevate personal finance with autonomous reconciliation & Qwen 2.5 intelligence.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex justify-center py-2">
-          <button
-            onClick={() => onSelectPage('settings')}
-            className="rounded-xl p-2.5 text-finwell-cyan hover:bg-white/5"
-            title="FinWell Pro Active"
-          >
-            <ShieldCheck className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+        ) : (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={() => onSelectPage('settings')}
+              className="rounded-xl p-2.5 text-finwell-cyan hover:bg-white/5"
+              title="FinWell Pro Active"
+            >
+              <ShieldCheck className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 };

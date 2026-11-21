@@ -1,130 +1,97 @@
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
+"""FinWell AI transaction normalization. Uses Decimal and reports row errors."""
+import re
+from datetime import datetime, date
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+CENT = Decimal("0.01")
+DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%d/%m/%y")
 
 
-def normalize_date(date_value):
-    """Convert supported date values to YYYY-MM-DD."""
-
-    if not date_value:
+def normalize_date(value):
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if not isinstance(value, str) or not value.strip():
         return None
-
-    if isinstance(date_value, datetime):
-        return date_value.strftime("%Y-%m-%d")
-
-    date_text = str(date_value).strip()
-
-    supported_formats = [
-        "%Y-%m-%d",
-        "%d-%m-%Y",
-        "%d/%m/%Y",
-        "%d-%m-%y",
-        "%d/%m/%y",
-    ]
-
-    for date_format in supported_formats:
+    raw = value.strip()
+    for fmt in DATE_FORMATS:
         try:
-            parsed_date = datetime.strptime(date_text, date_format)
-            return parsed_date.strftime("%Y-%m-%d")
+            return datetime.strptime(raw, fmt).date().isoformat()
         except ValueError:
             continue
-
     return None
 
 
-def normalize_amount(amount_value):
-    """Convert an amount to a rounded float, or None if unavailable."""
-
-    if amount_value is None or amount_value == "":
+def normalize_amount(value):
+    if value is None or (isinstance(value, str) and not value.strip()):
         return None
-
+    if isinstance(value, bool):
+        raise ValueError("Boolean is not a valid amount")
+    raw = str(value).strip()
+    negative = raw.startswith("(") and raw.endswith(")")
+    if negative:
+        raw = raw[1:-1]
+    raw = raw.replace(",", "").replace("₹", "").replace("â‚¹", "")
+    raw = re.sub(r"^Rs\.?\s*", "", raw, flags=re.I).strip()
     try:
-        amount_text = str(amount_value).strip()
-
-        # Remove common currency symbols and separators
-        amount_text = (
-            amount_text
-            .replace(",", "")
-            .replace("₹", "")
-            .replace("Rs.", "")
-            .strip()
-        )
-
-        # Support accounting-style negative amounts: (250.00)
-        if amount_text.startswith("(") and amount_text.endswith(")"):
-            amount_text = "-" + amount_text[1:-1]
-
-        amount = Decimal(amount_text)
-
-        # Financial amounts are rounded to two decimal places
-        return float(amount.quantize(Decimal("0.01")))
-
-    except (InvalidOperation, ValueError):
-        return None
+        amount = Decimal(raw)
+        if not amount.is_finite():
+            raise ValueError("Amount must be finite")
+        if negative:
+            amount = -amount
+        return amount.quantize(CENT, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid amount: {value!r}") from exc
 
 
-def normalize_description(description):
-    """Clean and standardize a transaction description."""
-
-    if description is None:
+def normalize_description(value):
+    if value is None:
         return ""
-
-    description = str(description)
-
-    # Replace tabs and repeated whitespace with single spaces
-    description = " ".join(description.split())
-
-    return description.strip()
+    return re.sub(r"\s+", " ", str(value)).strip()
 
 
 def normalize_transaction(transaction):
-    """Normalize one transaction dictionary."""
-
     if not isinstance(transaction, dict):
-        return {
-            "success": False,
-            "transaction": None,
-            "error": "Transaction must be a dictionary."
-        }
+        return {"success": False, "transaction": None,
+                "errors": ["Transaction must be a dictionary."]}
+    errors = []
+    normalized = dict(transaction)
 
-    normalized_transaction = {
-        "date": normalize_date(transaction.get("date")),
-        "description": normalize_description(
-            transaction.get("description")
-        ),
-        "debit": normalize_amount(transaction.get("debit")),
-        "credit": normalize_amount(transaction.get("credit")),
-        "balance": normalize_amount(transaction.get("balance")),
-    }
+    parsed_date = normalize_date(transaction.get("date"))
+    if parsed_date is None:
+        errors.append(f"Invalid or missing date: {transaction.get('date')!r}")
+    normalized["date"] = parsed_date
 
-    return {
-        "success": True,
-        "transaction": normalized_transaction,
-        "error": None
-    }
+    normalized["description"] = normalize_description(transaction.get("description"))
+    if not normalized["description"]:
+        errors.append("Missing transaction description.")
+
+    for field in ("debit", "credit", "balance"):
+        try:
+            normalized[field] = normalize_amount(transaction.get(field))
+        except ValueError as exc:
+            errors.append(f"{field}: {exc}")
+            normalized[field] = None
+
+    # Preserve parser uncertainty for the validator.
+    normalized["direction_uncertain"] = bool(transaction.get("direction_uncertain", False))
+    return {"success": not errors, "transaction": normalized, "errors": errors}
 
 
 def normalize_transactions(transactions):
-    """Normalize a list of transaction dictionaries."""
-
     if not isinstance(transactions, list):
-        return {
-            "success": False,
-            "transactions": [],
-            "total_transactions": 0,
-            "error": "Input must be a list."
-        }
-
-    normalized_transactions = []
-
-    for transaction in transactions:
+        return {"success": False, "transactions": [], "total_transactions": 0,
+                "invalid_count": 0, "errors": ["Input must be a list."]}
+    normalized, invalid, errors = [], [], []
+    for index, transaction in enumerate(transactions):
         result = normalize_transaction(transaction)
-
-        if result["success"]:
-            normalized_transactions.append(result["transaction"])
-
-    return {
-        "success": True,
-        "transactions": normalized_transactions,
-        "total_transactions": len(normalized_transactions),
-        "error": None
-    }
+        if result["transaction"] is not None:
+            normalized.append(result["transaction"])
+        if not result["success"]:
+            invalid.append({"index": index, "transaction": transaction,
+                            "errors": result["errors"]})
+            errors.extend([f"Row {index + 1}: {e}" for e in result["errors"]])
+    return {"success": len(invalid) == 0, "transactions": normalized,
+            "total_transactions": len(normalized), "invalid_count": len(invalid),
+            "invalid_transactions": invalid, "errors": errors}

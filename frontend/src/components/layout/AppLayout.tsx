@@ -8,12 +8,14 @@ import { Menu, MessageSquare, Sparkles } from 'lucide-react';
 interface AppLayoutProps {
   currentPage: NavigationPage;
   onSelectPage: (page: NavigationPage) => void;
+  onRegisterNewUser?: () => void;
   children: React.ReactNode;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
   currentPage,
   onSelectPage,
+  onRegisterNewUser,
   children,
 }) => {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
@@ -29,7 +31,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <BackgroundParticles3D />
 
       {/* Top Demo Banner */}
-      <DemoBanner />
+      <DemoBanner onRegisterNewUser={onRegisterNewUser} />
 
       {/* Main Three-Column Layout Container */}
       <div className="relative z-10 flex flex-1 overflow-hidden">
@@ -40,6 +42,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             onSelectPage={onSelectPage}
             isCollapsed={isLeftCollapsed}
             onToggleCollapse={() => setIsLeftCollapsed(!isLeftCollapsed)}
+            onRegisterNewUser={onRegisterNewUser}
           />
         </div>
 
@@ -59,6 +62,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 }}
                 isCollapsed={false}
                 onToggleCollapse={() => setMobileMenuOpen(false)}
+                onRegisterNewUser={onRegisterNewUser}
               />
             </div>
           </div>

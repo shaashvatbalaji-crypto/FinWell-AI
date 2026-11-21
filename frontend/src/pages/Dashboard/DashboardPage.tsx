@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   CreditCard,
   Building,
+  Plus,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -35,7 +36,9 @@ import { TiltCard } from '../../components/3d/TiltCard';
 import { analyticsService } from '../../services/analytics/analyticsService';
 import { accountService } from '../../services/accounts/accountService';
 import { transactionService } from '../../services/transactions/transactionService';
-import { Account, AnalyticsSummary, MonthlyTrend, CategorySpending, Transaction } from '../../types';
+import { reconciliationService } from '../../services/reconciliation/reconciliationService';
+import { formatCurrency } from '../../utils/formatters';
+import { Account, AnalyticsSummary, MonthlyTrend, CategorySpending, Transaction, ReconciliationCase } from '../../types';
 import { NavigationPage } from '../../components/layout/LeftSidebar';
 
 interface DashboardPageProps {
@@ -48,24 +51,31 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [categories, setCategories] = useState<CategorySpending[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [reconcileCases, setReconcileCases] = useState<ReconciliationCase[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     Promise.all([
-      analyticsService.getSummary(),
-      analyticsService.getMonthlyTrends(),
-      analyticsService.getCategorySpending(),
-      accountService.getAccounts(),
-      transactionService.getTransactions({ sortBy: 'date_desc' }),
-    ]).then(([sum, tr, cat, acc, txn]) => {
-      setSummary(sum);
+      analyticsService.getSummary().catch(() => null),
+      analyticsService.getMonthlyTrends().catch(() => []),
+      analyticsService.getCategorySpending().catch(() => []),
+      accountService.getAccounts().catch(() => []),
+      transactionService.getTransactions({ sortBy: 'date_desc' }).catch(() => ({ count: 0, transactions: [] })),
+      reconciliationService.getCases().catch(() => []),
+    ]).then(([sum, tr, cat, acc, txn, cases]) => {
+      if (sum) setSummary(sum);
       setTrends(tr);
       setCategories(cat);
       setAccounts(acc);
       setRecentTransactions(txn.transactions.slice(0, 5));
+      setReconcileCases(cases);
+      setIsLoading(false);
+    }).catch(() => {
       setIsLoading(false);
     });
   }, []);
+
+  const currency = summary?.currency || 'INR';
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -91,7 +101,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             size="sm"
             icon={<Calendar className="h-3.5 w-3.5 text-finwell-cyan" />}
           >
-            March 2026
+            {trends.length > 0 ? trends[trends.length - 1].month : 'Active Period'}
           </Button>
 
           <Button
@@ -110,27 +120,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Total Balance"
-          value={`$${summary?.total_balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '122,330.65'}`}
+          value={formatCurrency(summary?.total_balance ?? 0, currency)}
           change="+8.7%"
           isPositive={true}
-          subtitle="across 4 institutions"
+          subtitle={`across ${accounts.length} ${accounts.length === 1 ? 'vault' : 'vaults'}`}
           icon={<Wallet className="h-5 w-5" />}
           accentColor="blue"
         />
 
         <StatCard
           title="Total Income"
-          value={`$${summary?.total_income.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '24,800.00'}`}
+          value={formatCurrency(summary?.total_income ?? 0, currency)}
           change="+12.4%"
           isPositive={true}
-          subtitle="vs prior month"
+          subtitle="verified inflows"
           icon={<TrendingUp className="h-5 w-5" />}
           accentColor="cyan"
         />
 
         <StatCard
           title="Total Expenses"
-          value={`$${summary?.total_expenses.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '9,420.50'}`}
+          value={formatCurrency(summary?.total_expenses ?? 0, currency)}
           change="-3.8%"
           isPositive={true}
           subtitle="controlled burn rate"
@@ -140,9 +150,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
         <StatCard
           title="Net Cash Flow"
-          value={`+$${summary?.net_cash_flow.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '15,379.50'}`}
-          change="62.0% rate"
-          isPositive={true}
+          value={`${(summary?.net_cash_flow ?? 0) >= 0 ? '+' : ''}${formatCurrency(summary?.net_cash_flow ?? 0, currency)}`}
+          change={`${summary?.savings_rate ?? 0}% rate`}
+          isPositive={(summary?.net_cash_flow ?? 0) >= 0}
           subtitle="surplus liquidity"
           icon={<ArrowUpRight className="h-5 w-5" />}
           accentColor="emerald"
@@ -150,33 +160,63 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       </div>
 
       {/* Smart Alerts & Reconciliation Banner */}
-      <div className="rounded-2xl border border-finwell-warning/30 bg-gradient-to-r from-finwell-warning/10 via-finwell-card to-finwell-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-finwell-warning/20 p-2 text-finwell-warning">
-            <AlertCircle className="h-5 w-5" />
+      {reconcileCases.length > 0 ? (
+        <div className="rounded-2xl border border-finwell-warning/30 bg-gradient-to-r from-finwell-warning/10 via-finwell-card to-finwell-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-finwell-warning/20 p-2 text-finwell-warning">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                Action Required: {reconcileCases.length} Suggested Reconciliation {reconcileCases.length === 1 ? 'Match' : 'Matches'} Identified
+                <Badge variant="warning" size="sm">
+                  {reconcileCases[0].confidence_score ? `${Math.round(reconcileCases[0].confidence_score * 100)}% Match` : 'Pending Review'}
+                </Badge>
+              </h4>
+              <p className="text-xs text-finwell-muted mt-0.5">
+                {reconcileCases[0].title || reconcileCases[0].description}
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              Action Required: 1 Suspected Duplicate Transaction Identified
-              <Badge variant="warning" size="sm">
-                96% Match
-              </Badge>
-            </h4>
-            <p className="text-xs text-finwell-muted mt-0.5">
-              GitHub Copilot Enterprise charged twice ($180.00 × 2) within 4 minutes on Executive Platinum Card.
-            </p>
-          </div>
-        </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onNavigate('reconciliation')}
-          className="border-finwell-warning/40 text-finwell-warning hover:bg-finwell-warning/10"
-        >
-          Review in Reconciliation Centre
-        </Button>
-      </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate('reconciliation')}
+            className="border-finwell-warning/40 text-finwell-warning hover:bg-finwell-warning/10"
+          >
+            Review in Reconciliation Centre
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/5 bg-gradient-to-r from-finwell-card/90 via-finwell-card to-finwell-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-finwell-success/15 p-2 text-finwell-success">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                Audit Status: All Accounts Reconciled
+                <Badge variant="success" size="sm">
+                  In Sync
+                </Badge>
+              </h4>
+              <p className="text-xs text-finwell-muted mt-0.5">
+                Every transaction is mapped to verified bank statements. Run dry-run evaluation anytime to audit new statements.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate('reconciliation')}
+            className="border-white/10 text-finwell-dim hover:text-white"
+          >
+            Open Reconciliation Centre
+          </Button>
+        </div>
+      )}
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -315,12 +355,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <CreditCard className="h-4 w-4 text-finwell-cyan" />
               Connected Vaults
             </h3>
-            <button
-              onClick={() => onNavigate('accounts')}
-              className="text-xs text-finwell-primary hover:text-finwell-cyan font-semibold flex items-center gap-1"
-            >
-              Manage <ArrowRight className="h-3 w-3" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onNavigate('accounts')}
+                className="text-xs text-finwell-cyan hover:text-white font-semibold flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 transition-colors"
+                title="Create a new bank account or vault"
+              >
+                <Plus className="h-3 w-3" /> New Vault
+              </button>
+              <button
+                onClick={() => onNavigate('accounts')}
+                className="text-xs text-finwell-primary hover:text-finwell-cyan font-semibold flex items-center gap-1"
+              >
+                Manage <ArrowRight className="h-3 w-3" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -334,7 +383,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                     </p>
                   </div>
                   <span className="text-sm font-extrabold text-white">
-                    ${acc.current_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {formatCurrency(acc.current_balance, acc.currency)}
                   </span>
                 </div>
               </TiltCard>
@@ -379,7 +428,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         t.direction === 'credit' ? 'text-finwell-success' : 'text-white'
                       }`}
                     >
-                      {t.direction === 'credit' ? '+' : '-'}${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      {t.direction === 'credit' ? '+' : '-'}{formatCurrency(t.amount, t.currency)}
                     </td>
                     <td className="py-3 text-center">
                       <Badge

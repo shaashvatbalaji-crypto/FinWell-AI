@@ -1,67 +1,187 @@
 {
-    "pipeline_status": "SUCCESS",
-    "pipeline_error": null,
-    "pdf_path": "C:\\Users\\shaas\\Downloads\\finwell_reconciliation_secondary_complex_dec2026.pdf",
-    "pdf_valid": true,
-    "extracted_characters": 2252,
-    "cleaned_characters": 1774,
-    "document_type": "bank_statement",
-    "parsed_transactions": 13,
-    "normalized_transactions": 13,
-    "validated_transactions": 13,
-    "total_debits": 12666.7,
-    "total_credits": 34095.0,
-    "opening_balance": 30050.0,
-    "closing_balance": 51478.3,
-    "calculated_closing_balance": 51478.3,
-    "balance_difference": null,
-    "running_balance_reconciliation": "PASS",
-    "validation_result": "SUCCESS",
-    "stages": {
-        "PDF Validation": {
-            "status": "PASS",
-            "details": null
-        },
-        "PDF Text Extraction": {
-            "status": "PASS",
-            "details": "Extracted characters: 2252"
-        },
-        "Text Cleaning": {
-            "status": "PASS",
-            "details": "Cleaned characters: 1774"
-        },
-        "Document Classification": {
-            "status": "PASS",
-            "details": "Document type: bank_statement"
-        },
-        "Transaction Parsing": {
-            "status": "PASS",
-            "details": "Parsed transactions: 13"
-        },
-        "Transaction Normalization": {
-            "status": "PASS",
-            "details": "Normalized transactions: 13"
-        },
-        "Transaction Validation": {
-            "status": "PASS",
-            "details": "Validated transactions: 13"
-        },
-        "Financial Summary": {
-            "status": "PASS",
-            "details": "Debits: ₹12,666.70 | Credits: ₹34,095.00"
-        },
-        "Running Balance Reconciliation": {
-            "status": "PASS",
-            "details": "All available transaction balances match."
-        }
+  "pipeline_status": "PASS",
+  "pdf_path": "C:\\Users\\shaas\\Downloads\\finwell_reconciliation_secondary_nov2026.pdf",
+  "stages": {
+    "PDF Validation": {
+      "status": "PASS",
+      "details": null
     },
-    "classification_confidence": 0.43,
-    "reconciliation_details": {
-        "checked": true,
-        "status": "PASS",
-        "reason": null,
-        "mismatches": [],
-        "calculated_closing_balance": 51478.3
+    "PDF Text Extraction": {
+      "status": "PASS",
+      "details": "1261 characters"
     },
-    "completed_at": "2026-11-18T21:38:37.593898"
+    "Text Cleaning": {
+      "status": "PASS",
+      "details": "931 characters"
+    },
+    "Document Classification": {
+      "status": "PASS",
+      "details": "bank_statement"
+    },
+    "Transaction Parsing": {
+      "status": "PASS",
+      "details": "5 rows"
+    },
+    "Transaction Normalization": {
+      "status": "PASS",
+      "details": "5 rows; 0 normalization errors"
+    },
+    "Transaction Validation": {
+      "status": "PASS",
+      "details": "5 valid; 0 need review"
+    },
+    "Financial Totals": {
+      "status": "PASS",
+      "details": "debits=2950.00; credits=13000.00"
+    },
+    "Running Balance Check": {
+      "status": "PASS",
+      "details": "5 recorded balances checked"
+    },
+    "Statement Closing Balance Check": {
+      "status": "PASS",
+      "details": null
+    }
+  },
+  "parsed_transactions": 5,
+  "normalized_transactions": 5,
+  "validated_transactions": 5,
+  "invalid_transactions": [],
+  "total_debits": "2950.00",
+  "total_credits": "13000.00",
+  "opening_balance": "20000.00",
+  "statement_closing_balance": "30050.00",
+  "calculated_closing_balance": "30050.00",
+  "running_balance_reconciliation": {
+    "status": "PASS",
+    "checked_rows": 5,
+    "mismatches": [],
+    "calculated_closing_balance": "30050.00",
+    "reason": null
+  },
+  "document_type": "bank_statement",
+  "parsed_transaction_details": [
+    {
+      "date": "2026-11-06",
+      "description": "UPI RECEIVED FROM OWN AC 4821 REF TRF501 MC2606NOV739201",
+      "debit": null,
+      "credit": "5000.00",
+      "balance": "25000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-09",
+      "description": "ATM CASH WITHDRAWAL MC2609NOV739202",
+      "debit": "1000.00",
+      "credit": null,
+      "balance": "24000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-13",
+      "description": "FREELANCE PAYMENT MC2613NOV739203",
+      "debit": null,
+      "credit": "8000.00",
+      "balance": "32000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-17",
+      "description": "RESTAURANT PAYMENT MC2617NOV739204",
+      "debit": "750.00",
+      "credit": null,
+      "balance": "31250.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-21",
+      "description": "ONLINE PURCHASE MC2621NOV739205",
+      "debit": "1200.00",
+      "credit": null,
+      "balance": "30050.00",
+      "direction_uncertain": false
+    }
+  ],
+  "normalization_errors": [],
+  "normalized_transaction_details": [
+    {
+      "date": "2026-11-06",
+      "description": "UPI RECEIVED FROM OWN AC 4821 REF TRF501 MC2606NOV739201",
+      "debit": null,
+      "credit": "5000.00",
+      "balance": "25000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-09",
+      "description": "ATM CASH WITHDRAWAL MC2609NOV739202",
+      "debit": "1000.00",
+      "credit": null,
+      "balance": "24000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-13",
+      "description": "FREELANCE PAYMENT MC2613NOV739203",
+      "debit": null,
+      "credit": "8000.00",
+      "balance": "32000.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-17",
+      "description": "RESTAURANT PAYMENT MC2617NOV739204",
+      "debit": "750.00",
+      "credit": null,
+      "balance": "31250.00",
+      "direction_uncertain": false
+    },
+    {
+      "date": "2026-11-21",
+      "description": "ONLINE PURCHASE MC2621NOV739205",
+      "debit": "1200.00",
+      "credit": null,
+      "balance": "30050.00",
+      "direction_uncertain": false
+    }
+  ],
+  "validated_transaction_details": [
+    {
+      "date": "2026-11-06",
+      "description": "UPI RECEIVED FROM OWN AC 4821 REF TRF501 MC2606NOV739201",
+      "debit": null,
+      "credit": "5000.00",
+      "balance": "25000.00"
+    },
+    {
+      "date": "2026-11-09",
+      "description": "ATM CASH WITHDRAWAL MC2609NOV739202",
+      "debit": "1000.00",
+      "credit": null,
+      "balance": "24000.00"
+    },
+    {
+      "date": "2026-11-13",
+      "description": "FREELANCE PAYMENT MC2613NOV739203",
+      "debit": null,
+      "credit": "8000.00",
+      "balance": "32000.00"
+    },
+    {
+      "date": "2026-11-17",
+      "description": "RESTAURANT PAYMENT MC2617NOV739204",
+      "debit": "750.00",
+      "credit": null,
+      "balance": "31250.00"
+    },
+    {
+      "date": "2026-11-21",
+      "description": "ONLINE PURCHASE MC2621NOV739205",
+      "debit": "1200.00",
+      "credit": null,
+      "balance": "30050.00"
+    }
+  ],
+  "closing_balance_difference": "0.00",
+  "statement_closing_balance_check": "PASS"
 }

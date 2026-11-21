@@ -18,6 +18,7 @@ import { Modal } from '../../components/common/Modal';
 import { accountService, CreateAccountDTO } from '../../services/accounts/accountService';
 import { Account, AccountType, Transaction } from '../../types';
 import { transactionService } from '../../services/transactions/transactionService';
+import { formatCurrency } from '../../utils/formatters';
 
 export const AccountsPage: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -33,7 +34,7 @@ export const AccountsPage: React.FC = () => {
     institution_name: '',
     account_type: 'savings',
     masked_account_number: '',
-    currency: 'USD',
+    currency: 'INR',
     initial_balance: 0,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -177,7 +178,7 @@ export const AccountsPage: React.FC = () => {
                       acc.current_balance < 0 ? 'text-finwell-danger' : 'text-white'
                     }`}
                   >
-                    ${acc.current_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} {acc.currency}
+                    {formatCurrency(acc.current_balance, acc.currency)}
                   </p>
                 </div>
               </div>

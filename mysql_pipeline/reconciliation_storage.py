@@ -186,19 +186,32 @@ def list_pending_matches(user_id, limit=100):
                 rm.confidence_score,
                 rm.match_status,
                 rm.match_reason,
+                rm.created_at,
                 t1.transaction_date AS first_date,
                 t1.description AS first_description,
                 t1.debit AS first_debit,
                 t1.credit AS first_credit,
+                t1.account_id AS first_account_id,
+                a1.account_name AS first_account_name,
+                a1.currency AS first_currency,
                 t2.transaction_date AS second_date,
                 t2.description AS second_description,
                 t2.debit AS second_debit,
-                t2.credit AS second_credit
+                t2.credit AS second_credit,
+                t2.account_id AS second_account_id,
+                a2.account_name AS second_account_name,
+                a2.currency AS second_currency
             FROM reconciliation_matches rm
             INNER JOIN transactions t1
                 ON rm.transaction_id = t1.transaction_id
+            LEFT JOIN accounts a1
+                ON t1.account_id = a1.account_id
+               AND a1.user_id = %s
             INNER JOIN transactions t2
                 ON rm.matched_transaction_id = t2.transaction_id
+            LEFT JOIN accounts a2
+                ON t2.account_id = a2.account_id
+               AND a2.user_id = %s
             WHERE t1.user_id = %s
               AND t2.user_id = %s
               AND rm.match_status = 'suggested'
@@ -206,7 +219,7 @@ def list_pending_matches(user_id, limit=100):
             LIMIT %s
         """
 
-        cursor.execute(query, (user_id, user_id, limit))
+        cursor.execute(query, (user_id, user_id, user_id, user_id, limit))
 
         matches = cursor.fetchall()
 

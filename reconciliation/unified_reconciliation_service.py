@@ -457,3 +457,100 @@ def reconcile_all_transactions(
         )
 
     return output
+    
+# ============================================================
+# DATABASE-INTEGRATED RECONCILIATION ENTRY POINT
+# ============================================================
+
+from mysql_pipeline.transaction_storage import list_user_transactions
+from mysql_pipeline.account_storage import list_user_accounts
+
+
+def reconcile_user_from_database(
+    user_id,
+    transaction_limit=500,
+    max_transfer_date_gap_days=1,
+    max_refund_date_gap_days=90,
+):
+    """
+    Fetch a user's stored transactions and accounts,
+    then run all existing reconciliation engines.
+
+    DRY RUN:
+    - Does not modify transactions.
+    - Does not create reconciliation cases.
+    - Does not confirm or reject matches.
+    """
+
+    if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+        return {"success": False, "message": "Invalid user_id."}
+
+    # 1. Retrieve stored transactions
+    transaction_result = list_user_transactions(
+        user_id,
+        limit=transaction_limit,
+        offset=0,
+    )
+
+    if not transaction_result.get("success"):
+        return {
+            "success": False,
+            "stage": "transaction_retrieval",
+            "message": transaction_result.get("message"),
+        }
+
+    transactions = transaction_result.get("transactions", [])
+
+    if not transactions:
+        return {
+            "success": False,
+            "stage": "transaction_retrieval",
+            "message": "No transactions found.",
+        }
+
+    # 2. Retrieve account metadata
+    account_result = list_user_accounts(user_id)
+
+    if not account_result.get("success"):
+        return {
+            "success": False,
+            "stage": "account_retrieval",
+            "message": account_result.get("message"),
+        }
+
+    account_rows = account_result.get("accounts", [])
+
+    # 3. Prepare verified account metadata and associate currency
+    account_map = {account["account_id"]: account for account in account_rows}
+
+    for tx in transactions:
+        acc = account_map.get(tx.get("account_id"))
+        if acc and not tx.get("currency"):
+            tx["currency"] = acc.get("currency")
+
+    accounts = {
+        account["account_id"]: {
+            **account,
+            "verified": True,
+        }
+        for account in account_rows
+    }
+
+    # 4. Run the existing reconciliation coordinator
+    result = reconcile_all_transactions(
+        transactions,
+        accounts=accounts,
+        max_transfer_date_gap_days=max_transfer_date_gap_days,
+        max_refund_date_gap_days=max_refund_date_gap_days,
+    )
+
+    # 5. Return unified result
+    return {
+        "success": result.get("success", False),
+        "user_id": user_id,
+        "mode": "database_dry_run",
+        "transactions_retrieved": len(transactions),
+        "accounts_retrieved": len(account_rows),
+        "reconciliation": result,
+        "writes_performed": False,
+    }

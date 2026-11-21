@@ -11,6 +11,8 @@ import {
   RotateCcw,
   Sparkles,
   Lock,
+  LogOut,
+  UserPlus,
 } from 'lucide-react';
 import { TiltCard } from '../../components/3d/TiltCard';
 import { Badge } from '../../components/common/Badge';
@@ -19,8 +21,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { apiClient } from '../../services/api/apiClient';
 
-export const SettingsPage: React.FC = () => {
-  const { user, isMockMode, setMockMode } = useAuth();
+interface SettingsPageProps {
+  onRegisterNewUser?: () => void;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onRegisterNewUser }) => {
+  const { user, isMockMode, setMockMode, logout } = useAuth();
   const { mode, toggleMode, reducedMotion, setReducedMotion } = useTheme();
 
   // Settings State
@@ -92,6 +98,55 @@ export const SettingsPage: React.FC = () => {
           <span>{savedMessage}</span>
         </div>
       )}
+
+      {/* User Session & Account Switching Card */}
+      <TiltCard className="p-6 border-white/10 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-finwell-surface p-2.5 text-finwell-cyan border border-white/5">
+              <User className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">Active Account & Session</h3>
+                <Badge variant="cyan" size="sm">
+                  User ID: #{user?.user_id || '3'}
+                </Badge>
+              </div>
+              <p className="text-xs text-finwell-muted mt-0.5">
+                Authenticated as <span className="text-white font-mono font-semibold">{user?.email || 'ram@gmail.com'}</span> ({user?.full_name || user?.username || 'Ram'})
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {onRegisterNewUser && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRegisterNewUser}
+                icon={<UserPlus className="h-3.5 w-3.5 text-finwell-cyan" />}
+              >
+                Create New User
+              </Button>
+            )}
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={logout}
+              icon={<LogOut className="h-3.5 w-3.5 text-finwell-danger" />}
+              className="hover:border-finwell-danger/50 hover:text-finwell-danger"
+            >
+              Log Out
+            </Button>
+          </div>
+        </div>
+
+        <p className="text-xs text-finwell-dim">
+          Logging out terminates the active JWT session and returns you to the login screen where you can sign in with other credentials or register a new account.
+        </p>
+      </TiltCard>
 
       {/* 1. Backend Connectivity & Mock Mode Control (Crucial Requirement) */}
       <TiltCard className="p-6 border-finwell-primary/40 space-y-5">
