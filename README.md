@@ -17,6 +17,16 @@
   <a href="#-vercel-deployment"><img src="https://img.shields.io/badge/Vercel-Ready-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel Ready" /></a>
 </p>
 
+<p align="center">
+  <a href="docs/assets/finwell-ai-intro.mp4">
+    <img src="docs/assets/finwell-ai-intro.gif" alt="FinWell AI - Your Money Moves Every Day" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <em><strong>"Your Money Moves Every Day. Do You Know Where It Goes?"</strong> &mdash; Watch the 1080p master <a href="docs/assets/finwell-ai-intro.mp4">MP4 Video</a> &bull; Explore <a href="docs/assets/PRODUCTION_REPORT.md">Production Report</a></em>
+</p>
+
 ---
 
 ## 👥 Who Needs This Application? (Real-World Financial Impact)
