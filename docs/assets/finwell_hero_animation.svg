@@ -1,309 +1,313 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 380" width="100%" height="100%">
-  <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#050B14"/>
-      <stop offset="50%" stop-color="#0B132B"/>
-      <stop offset="100%" stop-color="#070D1E"/>
-    </linearGradient>
-
-    <!-- Glowing Accent Gradients -->
-    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#00F2FE"/>
-      <stop offset="100%" stop-color="#4FACFE"/>
-    </linearGradient>
-
-    <linearGradient id="violetPink" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#7F00FF"/>
-      <stop offset="100%" stop-color="#E100FF"/>
-    </linearGradient>
-
-    <linearGradient id="emeraldTeal" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#10B981"/>
-      <stop offset="100%" stop-color="#06B6D4"/>
-    </linearGradient>
-
-    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#131E3A" stop-opacity="0.85"/>
-      <stop offset="100%" stop-color="#0C152B" stop-opacity="0.95"/>
-    </linearGradient>
-
-    <!-- Glow Filters -->
-    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-
-    <filter id="glowPurple" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-
-    <!-- Embedded Animation Styles -->
-    <style>
-      @keyframes dashMove {
-        from { stroke-dashoffset: 120; }
-        to { stroke-dashoffset: 0; }
-      }
-      @keyframes dashMoveRev {
-        from { stroke-dashoffset: 0; }
-        to { stroke-dashoffset: 120; }
-      }
-      @keyframes pulseOrb {
-        0%, 100% { transform: scale(1); opacity: 0.85; filter: drop-shadow(0 0 12px #00F2FE); }
-        50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 24px #00F2FE); }
-      }
-      @keyframes ringExpand {
-        0% { r: 35; opacity: 0.8; stroke-width: 2; }
-        100% { r: 68; opacity: 0; stroke-width: 0.5; }
-      }
-      @keyframes floatSlow {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-6px); }
-      }
-      @keyframes floatOpposite {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(6px); }
-      }
-      @keyframes blinkStatus {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-      }
-      @keyframes currencyFloat {
-        0% { transform: translateY(0px); opacity: 0; }
-        30% { opacity: 0.9; }
-        70% { opacity: 0.9; }
-        100% { transform: translateY(-24px); opacity: 0; }
-      }
-
-      .dash-flow-left {
-        stroke-dasharray: 8 6;
-        animation: dashMove 2s linear infinite;
-      }
-      .dash-flow-right {
-        stroke-dasharray: 8 6;
-        animation: dashMoveRev 2s linear infinite;
-      }
-      .orb-core {
-        transform-origin: 470px 190px;
-        animation: pulseOrb 3.5s ease-in-out infinite;
-      }
-      .ripple-ring-1 {
-        animation: ringExpand 2.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
-      }
-      .ripple-ring-2 {
-        animation: ringExpand 2.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite 1.4s;
-      }
-      .card-left {
-        animation: floatSlow 4s ease-in-out infinite;
-      }
-      .card-right {
-        animation: floatOpposite 4.2s ease-in-out infinite;
-      }
-      .status-dot {
-        animation: blinkStatus 1.8s ease-in-out infinite;
-      }
-      .currency-tag-1 {
-        animation: currencyFloat 3s ease-in-out infinite;
-      }
-      .currency-tag-2 {
-        animation: currencyFloat 3s ease-in-out infinite 1.5s;
-      }
-    </style>
-  </defs>
-
-  <!-- Canvas Background -->
-  <rect width="940" height="380" rx="20" fill="url(#bgGrad)"/>
-  
-  <!-- Subtle Grid Pattern Lines -->
-  <g stroke="#1E293B" stroke-width="0.75" opacity="0.35">
-    <line x1="60" y1="0" x2="60" y2="380"/>
-    <line x1="200" y1="0" x2="200" y2="380"/>
-    <line x1="340" y1="0" x2="340" y2="380"/>
-    <line x1="470" y1="0" x2="470" y2="380"/>
-    <line x1="600" y1="0" x2="600" y2="380"/>
-    <line x1="740" y1="0" x2="740" y2="380"/>
-    <line x1="880" y1="0" x2="880" y2="380"/>
-    <line x1="0" y1="70" x2="940" y2="70"/>
-    <line x1="0" y1="190" x2="940" y2="190"/>
-    <line x1="0" y1="310" x2="940" y2="310"/>
-  </g>
-
-  <!-- Header Branding Section -->
-  <g transform="translate(40, 36)">
-    <!-- Shield Logo Icon -->
-    <rect x="0" y="0" width="34" height="34" rx="10" fill="url(#cyanBlue)"/>
-    <path d="M17 7 L26 11 V18 C26 23.5 22.2 27.5 17 29 C11.8 27.5 8 23.5 8 18 V11 Z" fill="#0A0E17"/>
-    <path d="M14 18 L16.5 20.5 L20.5 15.5" stroke="#00F2FE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-
-    <!-- Product Title & Subtitle -->
-    <text x="46" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5">
-      FINWELL <tspan fill="#00F2FE">AI</tspan>
-    </text>
-    <text x="175" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" fill="#94A3B8" letter-spacing="1.5">
-      • NEURAL FINANCIAL RECONCILIATION ENGINE
-    </text>
-
-    <!-- Live Status Pill (Right Aligned) -->
-    <g transform="translate(680, 2)">
-      <rect x="0" y="0" width="175" height="26" rx="13" fill="#1E293B" stroke="#334155" stroke-width="1"/>
-      <circle class="status-dot" cx="16" cy="13" r="4.5" fill="#10B981"/>
-      <text x="28" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#E2E8F0" letter-spacing="0.5">
-        LEDGER AUDIT: ACTIVE
-      </text>
-    </g>
-  </g>
-
-  <!-- ==================== FLOW CONNECTIONS ==================== -->
-  <!-- Left to Center Connecting Line -->
-  <path d="M 270 190 C 350 190, 390 190, 435 190" fill="none" stroke="#1E293B" stroke-width="3"/>
-  <path class="dash-flow-left" d="M 270 190 C 350 190, 390 190, 435 190" fill="none" stroke="url(#cyanBlue)" stroke-width="2.5" filter="url(#glowCyan)"/>
-
-  <!-- Center to Right Connecting Line -->
-  <path d="M 505 190 C 550 190, 590 190, 670 190" fill="none" stroke="#1E293B" stroke-width="3"/>
-  <path class="dash-flow-right" d="M 505 190 C 550 190, 590 190, 670 190" fill="none" stroke="url(#emeraldTeal)" stroke-width="2.5" filter="url(#glowCyan)"/>
-
-  <!-- ==================== LEFT VAULT: PRIMARY ACCOUNT ==================== -->
-  <g class="card-left" transform="translate(60, 105)">
-    <!-- Card Frame -->
-    <rect width="210" height="170" rx="16" fill="url(#cardGrad)" stroke="#38BDF8" stroke-width="1.2"/>
-    
-    <!-- Account Type Tag -->
-    <rect x="16" y="16" width="96" height="20" rx="6" fill="#0369A1" fill-opacity="0.4"/>
-    <text x="24" y="30" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#38BDF8" letter-spacing="0.5">
-      PRIMARY VAULT
-    </text>
-
-    <!-- Account Details -->
-    <text x="16" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#F8FAFC">
-      Savings Account
-    </text>
-    <text x="16" y="78" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="11" font-weight="600" fill="#64748B">
-      Acc: •••• 4821
-    </text>
-
-    <!-- Amount Badge -->
-    <rect x="16" y="98" width="178" height="52" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-    <text x="26" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="600" fill="#94A3B8">
-      OUTGOING TRANSFER
-    </text>
-    <text x="26" y="139" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="15" font-weight="800" fill="#EF4444">
-      - ₹5,000.00
-    </text>
-    <text x="138" y="138" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="9" font-weight="600" fill="#64748B">
-      #TRF501
-    </text>
-  </g>
-
-  <!-- ==================== CENTER CORE: RECONCILIATION ENGINE ==================== -->
-  <!-- Expanding Ripple Rings -->
-  <circle class="ripple-ring-1" cx="470" cy="190" r="35" fill="none" stroke="#00F2FE" stroke-opacity="0.7"/>
-  <circle class="ripple-ring-2" cx="470" cy="190" r="35" fill="none" stroke="#7F00FF" stroke-opacity="0.6"/>
-
-  <!-- Central Glowing Orb -->
-  <g class="orb-core">
-    <circle cx="470" cy="190" r="38" fill="url(#bgGrad)" stroke="url(#cyanBlue)" stroke-width="2.5" filter="url(#glowPurple)"/>
-    <!-- Inner Hologram Geometry -->
-    <polygon points="470,166 491,178 491,202 470,214 449,202 449,178" fill="none" stroke="#00F2FE" stroke-width="1.5" stroke-dasharray="3 2"/>
-    <circle cx="470" cy="190" r="14" fill="url(#cyanBlue)" opacity="0.9"/>
-    <!-- AI Core Symbol -->
-    <path d="M465 190 L469 194 L476 186" stroke="#050B14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  </g>
-
-  <!-- Engine Label & Score Badge -->
-  <g transform="translate(385, 245)">
-    <rect x="0" y="0" width="170" height="36" rx="10" fill="#0F172A" stroke="url(#cyanBlue)" stroke-width="1"/>
-    <text x="85" y="16" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="800" fill="#00F2FE" letter-spacing="1">
-      HEURISTIC MATCH ENGINE
-    </text>
-    <text x="85" y="29" text-anchor="middle" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="10" font-weight="700" fill="#10B981">
-      CONFIDENCE: 99.8%
-    </text>
-  </g>
-
-  <!-- Floating Match Indicator Tags -->
-  <g class="currency-tag-1" transform="translate(330, 160)">
-    <rect width="66" height="20" rx="10" fill="#10B981" fill-opacity="0.2" stroke="#10B981" stroke-width="0.8"/>
-    <text x="33" y="13" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9" font-weight="700" fill="#10B981">
-      REF MATCH
-    </text>
-  </g>
-
-  <g class="currency-tag-2" transform="translate(540, 160)">
-    <rect width="70" height="20" rx="10" fill="#00F2FE" fill-opacity="0.2" stroke="#00F2FE" stroke-width="0.8"/>
-    <text x="35" y="13" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9" font-weight="700" fill="#00F2FE">
-      DATE: Δ 0D
-    </text>
-  </g>
-
-  <!-- ==================== RIGHT VAULT: SECONDARY ACCOUNT ==================== -->
-  <g class="card-right" transform="translate(670, 105)">
-    <!-- Card Frame -->
-    <rect width="210" height="170" rx="16" fill="url(#cardGrad)" stroke="#10B981" stroke-width="1.2"/>
-    
-    <!-- Account Type Tag -->
-    <rect x="16" y="16" width="105" height="20" rx="6" fill="#065F46" fill-opacity="0.4"/>
-    <text x="24" y="30" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#34D399" letter-spacing="0.5">
-      SECONDARY VAULT
-    </text>
-
-    <!-- Account Details -->
-    <text x="16" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#F8FAFC">
-      Current Account
-    </text>
-    <text x="16" y="78" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="11" font-weight="600" fill="#64748B">
-      Acc: •••• 7392
-    </text>
-
-    <!-- Amount Badge -->
-    <rect x="16" y="98" width="178" height="52" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-    <text x="26" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="600" fill="#94A3B8">
-      INCOMING CREDIT
-    </text>
-    <text x="26" y="139" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="15" font-weight="800" fill="#10B981">
-      + ₹5,000.00
-    </text>
-    <text x="138" y="138" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="9" font-weight="600" fill="#64748B">
-      #TRF501
-    </text>
-  </g>
-
-  <!-- ==================== BOTTOM METRICS DOCK ==================== -->
-  <g transform="translate(60, 310)">
-    <!-- Pill 1: Multi-Account Isolation -->
-    <g transform="translate(0, 0)">
-      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-      <circle cx="16" cy="18" r="4" fill="#38BDF8"/>
-      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
-        Tenant Isolation: <tspan fill="#38BDF8" font-weight="700">Strict</tspan>
-      </text>
-    </g>
-
-    <!-- Pill 2: Processing Speed -->
-    <g transform="translate(210, 0)">
-      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-      <circle cx="16" cy="18" r="4" fill="#00F2FE"/>
-      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
-        PDF Pipeline: <tspan fill="#00F2FE" font-weight="700">50+ Pgs/Sec</tspan>
-      </text>
-    </g>
-
-    <!-- Pill 3: Match Engines -->
-    <g transform="translate(420, 0)">
-      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-      <circle cx="16" cy="18" r="4" fill="#A855F7"/>
-      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
-        Reconciliation: <tspan fill="#A855F7" font-weight="700">3 Engines</tspan>
-      </text>
-    </g>
-
-    <!-- Pill 4: Hybrid RAG -->
-    <g transform="translate(635, 0)">
-      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
-      <circle cx="16" cy="18" r="4" fill="#10B981"/>
-      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
-        Hybrid RAG: <tspan fill="#10B981" font-weight="700">ChromaDB + SQL</tspan>
-      </text>
-    </g>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 380" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050B14"/>
+      <stop offset="50%" stop-color="#0B132B"/>
+      <stop offset="100%" stop-color="#070D1E"/>
+    </linearGradient>
+
+    <!-- Glowing Accent Gradients -->
+    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00F2FE"/>
+      <stop offset="100%" stop-color="#4FACFE"/>
+    </linearGradient>
+
+    <linearGradient id="violetPink" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7F00FF"/>
+      <stop offset="100%" stop-color="#E100FF"/>
+    </linearGradient>
+
+    <linearGradient id="emeraldTeal" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#131E3A" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#0C152B" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <!-- Glow Filters -->
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="glowPurple" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Embedded Animation Styles -->
+    <style>
+      @keyframes dashMove {
+        from { stroke-dashoffset: 120; }
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes dashMoveRev {
+        from { stroke-dashoffset: 0; }
+        to { stroke-dashoffset: 120; }
+      }
+      @keyframes pulseOrb {
+        0%, 100% { transform: scale(1); opacity: 0.85; filter: drop-shadow(0 0 12px #00F2FE); }
+        50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 24px #00F2FE); }
+      }
+      @keyframes ringExpand {
+        0% { r: 35; opacity: 0.8; stroke-width: 2; }
+        100% { r: 68; opacity: 0; stroke-width: 0.5; }
+      }
+      @keyframes floatSlow {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-6px); }
+      }
+      @keyframes floatOpposite {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(6px); }
+      }
+      @keyframes blinkStatus {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      @keyframes currencyFloat {
+        0% { transform: translateY(0px); opacity: 0; }
+        30% { opacity: 0.9; }
+        70% { opacity: 0.9; }
+        100% { transform: translateY(-24px); opacity: 0; }
+      }
+
+      .dash-flow-left {
+        stroke-dasharray: 8 6;
+        animation: dashMove 2s linear infinite;
+      }
+      .dash-flow-right {
+        stroke-dasharray: 8 6;
+        animation: dashMoveRev 2s linear infinite;
+      }
+      .orb-core {
+        transform-origin: 470px 190px;
+        animation: pulseOrb 3.5s ease-in-out infinite;
+      }
+      .ripple-ring-1 {
+        animation: ringExpand 2.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
+      }
+      .ripple-ring-2 {
+        animation: ringExpand 2.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite 1.4s;
+      }
+      .card-left {
+        animation: floatSlow 4s ease-in-out infinite;
+      }
+      .card-right {
+        animation: floatOpposite 4.2s ease-in-out infinite;
+      }
+      .status-dot {
+        animation: blinkStatus 1.8s ease-in-out infinite;
+      }
+      .currency-tag-1 {
+        animation: currencyFloat 3s ease-in-out infinite;
+      }
+      .currency-tag-2 {
+        animation: currencyFloat 3s ease-in-out infinite 1.5s;
+      }
+    </style>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="940" height="380" rx="20" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle Grid Pattern Lines -->
+  <g stroke="#1E293B" stroke-width="0.75" opacity="0.35">
+    <line x1="60" y1="0" x2="60" y2="380"/>
+    <line x1="200" y1="0" x2="200" y2="380"/>
+    <line x1="340" y1="0" x2="340" y2="380"/>
+    <line x1="470" y1="0" x2="470" y2="380"/>
+    <line x1="600" y1="0" x2="600" y2="380"/>
+    <line x1="740" y1="0" x2="740" y2="380"/>
+    <line x1="880" y1="0" x2="880" y2="380"/>
+    <line x1="0" y1="70" x2="940" y2="70"/>
+    <line x1="0" y1="190" x2="940" y2="190"/>
+    <line x1="0" y1="310" x2="940" y2="310"/>
+  </g>
+
+  <!-- Header Branding Section -->
+  <g transform="translate(40, 36)">
+    <!-- Shield Logo Icon -->
+    <rect x="0" y="0" width="34" height="34" rx="10" fill="url(#cyanBlue)"/>
+    <path d="M17 7 L26 11 V18 C26 23.5 22.2 27.5 17 29 C11.8 27.5 8 23.5 8 18 V11 Z" fill="#0A0E17"/>
+    <path d="M14 18 L16.5 20.5 L20.5 15.5" stroke="#00F2FE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Product Title & Subtitle -->
+    <text x="46" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5">
+      FINWELL <tspan fill="#00F2FE">AI</tspan>
+    </text>
+    <text x="175" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" fill="#94A3B8" letter-spacing="1.5">
+      • NEURAL FINANCIAL RECONCILIATION ENGINE
+    </text>
+
+    <!-- Live Status Pill (Right Aligned) -->
+    <g transform="translate(680, 2)">
+      <rect x="0" y="0" width="175" height="26" rx="13" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+      <circle class="status-dot" cx="16" cy="13" r="4.5" fill="#10B981"/>
+      <text x="28" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#E2E8F0" letter-spacing="0.5">
+        LEDGER AUDIT: ACTIVE
+      </text>
+    </g>
+  </g>
+
+  <!-- ==================== FLOW CONNECTIONS ==================== -->
+  <!-- Left to Center Connecting Line -->
+  <path d="M 270 190 C 350 190, 390 190, 435 190" fill="none" stroke="#1E293B" stroke-width="3"/>
+  <path class="dash-flow-left" d="M 270 190 C 350 190, 390 190, 435 190" fill="none" stroke="url(#cyanBlue)" stroke-width="2.5" filter="url(#glowCyan)"/>
+
+  <!-- Center to Right Connecting Line -->
+  <path d="M 505 190 C 550 190, 590 190, 670 190" fill="none" stroke="#1E293B" stroke-width="3"/>
+  <path class="dash-flow-right" d="M 505 190 C 550 190, 590 190, 670 190" fill="none" stroke="url(#emeraldTeal)" stroke-width="2.5" filter="url(#glowCyan)"/>
+
+  <!-- ==================== LEFT VAULT: PRIMARY ACCOUNT ==================== -->
+  <g transform="translate(60, 105)">
+    <g class="card-left">
+    <!-- Card Frame -->
+    <rect width="210" height="170" rx="16" fill="url(#cardGrad)" stroke="#38BDF8" stroke-width="1.2"/>
+    
+    <!-- Account Type Tag -->
+    <rect x="16" y="16" width="96" height="20" rx="6" fill="#0369A1" fill-opacity="0.4"/>
+    <text x="24" y="30" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#38BDF8" letter-spacing="0.5">
+      PRIMARY VAULT
+    </text>
+
+    <!-- Account Details -->
+    <text x="16" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#F8FAFC">
+      Savings Account
+    </text>
+    <text x="16" y="78" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="11" font-weight="600" fill="#64748B">
+      Acc: •••• 4821
+    </text>
+
+    <!-- Amount Badge -->
+    <rect x="16" y="98" width="178" height="52" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+    <text x="26" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="600" fill="#94A3B8">
+      OUTGOING TRANSFER
+    </text>
+    <text x="26" y="139" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="15" font-weight="800" fill="#EF4444">
+      - ₹5,000.00
+    </text>
+    <text x="138" y="138" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="9" font-weight="600" fill="#64748B">
+      #TRF501
+    </text>
+    </g>
+  </g>
+
+  <!-- ==================== CENTER CORE: RECONCILIATION ENGINE ==================== -->
+  <!-- Expanding Ripple Rings -->
+  <circle class="ripple-ring-1" cx="470" cy="190" r="35" fill="none" stroke="#00F2FE" stroke-opacity="0.7"/>
+  <circle class="ripple-ring-2" cx="470" cy="190" r="35" fill="none" stroke="#7F00FF" stroke-opacity="0.6"/>
+
+  <!-- Central Glowing Orb -->
+  <g class="orb-core">
+    <circle cx="470" cy="190" r="38" fill="url(#bgGrad)" stroke="url(#cyanBlue)" stroke-width="2.5" filter="url(#glowPurple)"/>
+    <!-- Inner Hologram Geometry -->
+    <polygon points="470,166 491,178 491,202 470,214 449,202 449,178" fill="none" stroke="#00F2FE" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <circle cx="470" cy="190" r="14" fill="url(#cyanBlue)" opacity="0.9"/>
+    <!-- AI Core Symbol -->
+    <path d="M465 190 L469 194 L476 186" stroke="#050B14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Engine Label & Score Badge -->
+  <g transform="translate(385, 245)">
+    <rect x="0" y="0" width="170" height="36" rx="10" fill="#0F172A" stroke="url(#cyanBlue)" stroke-width="1"/>
+    <text x="85" y="16" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="800" fill="#00F2FE" letter-spacing="1">
+      HEURISTIC MATCH ENGINE
+    </text>
+    <text x="85" y="29" text-anchor="middle" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="10" font-weight="700" fill="#10B981">
+      CONFIDENCE: 99.8%
+    </text>
+  </g>
+
+  <!-- Floating Match Indicator Tags -->
+  <g class="currency-tag-1" transform="translate(330, 160)">
+    <rect width="66" height="20" rx="10" fill="#10B981" fill-opacity="0.2" stroke="#10B981" stroke-width="0.8"/>
+    <text x="33" y="13" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9" font-weight="700" fill="#10B981">
+      REF MATCH
+    </text>
+  </g>
+
+  <g class="currency-tag-2" transform="translate(540, 160)">
+    <rect width="70" height="20" rx="10" fill="#00F2FE" fill-opacity="0.2" stroke="#00F2FE" stroke-width="0.8"/>
+    <text x="35" y="13" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9" font-weight="700" fill="#00F2FE">
+      DATE: Δ 0D
+    </text>
+  </g>
+
+  <!-- ==================== RIGHT VAULT: SECONDARY ACCOUNT ==================== -->
+  <g transform="translate(670, 105)">
+    <g class="card-right">
+    <!-- Card Frame -->
+    <rect width="210" height="170" rx="16" fill="url(#cardGrad)" stroke="#10B981" stroke-width="1.2"/>
+    
+    <!-- Account Type Tag -->
+    <rect x="16" y="16" width="105" height="20" rx="6" fill="#065F46" fill-opacity="0.4"/>
+    <text x="24" y="30" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#34D399" letter-spacing="0.5">
+      SECONDARY VAULT
+    </text>
+
+    <!-- Account Details -->
+    <text x="16" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#F8FAFC">
+      Current Account
+    </text>
+    <text x="16" y="78" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="11" font-weight="600" fill="#64748B">
+      Acc: •••• 7392
+    </text>
+
+    <!-- Amount Badge -->
+    <rect x="16" y="98" width="178" height="52" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+    <text x="26" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="600" fill="#94A3B8">
+      INCOMING CREDIT
+    </text>
+    <text x="26" y="139" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="15" font-weight="800" fill="#10B981">
+      + ₹5,000.00
+    </text>
+    <text x="138" y="138" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="9" font-weight="600" fill="#64748B">
+      #TRF501
+    </text>
+    </g>
+  </g>
+
+  <!-- ==================== BOTTOM METRICS DOCK ==================== -->
+  <g transform="translate(60, 310)">
+    <!-- Pill 1: Multi-Account Isolation -->
+    <g transform="translate(0, 0)">
+      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+      <circle cx="16" cy="18" r="4" fill="#38BDF8"/>
+      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
+        Tenant Isolation: <tspan fill="#38BDF8" font-weight="700">Strict</tspan>
+      </text>
+    </g>
+
+    <!-- Pill 2: Processing Speed -->
+    <g transform="translate(210, 0)">
+      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+      <circle cx="16" cy="18" r="4" fill="#00F2FE"/>
+      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
+        PDF Pipeline: <tspan fill="#00F2FE" font-weight="700">50+ Pgs/Sec</tspan>
+      </text>
+    </g>
+
+    <!-- Pill 3: Match Engines -->
+    <g transform="translate(420, 0)">
+      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+      <circle cx="16" cy="18" r="4" fill="#A855F7"/>
+      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
+        Reconciliation: <tspan fill="#A855F7" font-weight="700">3 Engines</tspan>
+      </text>
+    </g>
+
+    <!-- Pill 4: Hybrid RAG -->
+    <g transform="translate(635, 0)">
+      <rect width="185" height="36" rx="8" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+      <circle cx="16" cy="18" r="4" fill="#10B981"/>
+      <text x="28" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="600" fill="#CBD5E1">
+        Hybrid RAG: <tspan fill="#10B981" font-weight="700">ChromaDB + SQL</tspan>
+      </text>
+    </g>
+  </g>
+</svg>
