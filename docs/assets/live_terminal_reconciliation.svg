@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 350" width="100%" height="100%">
+  <defs>
+    <!-- Terminal Window Gradient -->
+    <linearGradient id="termBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0E1626"/>
+      <stop offset="100%" stop-color="#080D18"/>
+    </linearGradient>
+
+    <!-- Header Gradient -->
+    <linearGradient id="termHeader" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+
+    <style>
+      @keyframes blinkCursor {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      @keyframes lineSlideIn {
+        0% { opacity: 0; transform: translateX(-10px); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes tagPulseGreen {
+        0%, 100% { fill: #10B981; }
+        50% { fill: #34D399; }
+      }
+      @keyframes tagPulseCyan {
+        0%, 100% { fill: #06B6D4; }
+        50% { fill: #22D3EE; }
+      }
+
+      .cursor { animation: blinkCursor 0.9s infinite; }
+      .line-1 { animation: lineSlideIn 0.4s ease-out forwards; }
+      .line-2 { animation: lineSlideIn 0.4s ease-out forwards 0.2s; }
+      .line-3 { animation: lineSlideIn 0.4s ease-out forwards 0.4s; }
+      .line-4 { animation: lineSlideIn 0.4s ease-out forwards 0.6s; }
+      .line-5 { animation: lineSlideIn 0.4s ease-out forwards 0.8s; }
+      .line-6 { animation: lineSlideIn 0.4s ease-out forwards 1.0s; }
+      .line-7 { animation: lineSlideIn 0.4s ease-out forwards 1.2s; }
+      .tag-green { animation: tagPulseGreen 2.5s infinite; }
+      .tag-cyan { animation: tagPulseCyan 2.5s infinite; }
+    </style>
+  </defs>
+
+  <!-- Window Frame Outer Border -->
+  <rect width="940" height="350" rx="14" fill="#1E293B" stroke="#334155" stroke-width="1.2"/>
+  
+  <!-- Window Inner Background -->
+  <rect x="1" y="1" width="938" height="348" rx="13" fill="url(#termBg)"/>
+
+  <!-- Window Titlebar -->
+  <rect x="1" y="1" width="938" height="38" rx="13" fill="url(#termHeader)"/>
+  <rect x="1" y="26" width="938" height="13" fill="url(#termHeader)"/>
+  <line x1="1" y1="39" x2="939" y2="39" stroke="#1E293B" stroke-width="1"/>
+
+  <!-- macOS Window Control Dots -->
+  <circle cx="22" cy="20" r="6" fill="#EF4444"/>
+  <circle cx="42" cy="20" r="6" fill="#F59E0B"/>
+  <circle cx="62" cy="20" r="6" fill="#10B981"/>
+
+  <!-- Window Title -->
+  <text x="470" y="24" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#94A3B8" letter-spacing="0.5">
+    finwell-core-daemon — neural-reconciliation-stream — bash — 80x24
+  </text>
+
+  <!-- Live Activity Indicator Right -->
+  <g transform="translate(805, 12)">
+    <rect width="112" height="16" rx="8" fill="#0F172A" stroke="#334155" stroke-width="0.8"/>
+    <circle cx="10" cy="8" r="3.5" class="tag-green"/>
+    <text x="20" y="11.5" font-family="SFMono-Regular, Consolas, monospace" font-size="8.5" font-weight="700" fill="#E2E8F0">
+      LIVE FEED: 12ms
+    </text>
+  </g>
+
+  <!-- Terminal Content Lines -->
+  <g transform="translate(24, 66)" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="11.5">
+    <!-- Line 1: Startup -->
+    <g class="line-1">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:11]</text>
+      <text x="175" y="0" fill="#38BDF8" font-weight="700">INFO </text>
+      <text x="220" y="0" fill="#F8FAFC">FinWell Neural Ledger initialized on </text>
+      <text x="500" y="0" fill="#00F2FE" font-weight="700">http://127.0.0.1:8001</text>
+      <text x="690" y="0" fill="#64748B">(MySQL + ChromaDB)</text>
+    </g>
+
+    <!-- Line 2: Ingestion & Auto-Detection -->
+    <g class="line-2" transform="translate(0, 28)">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:12]</text>
+      <text x="175" y="0" fill="#A855F7" font-weight="700">INGEST</text>
+      <text x="220" y="0" fill="#CBD5E1">Auto-detected statement header: </text>
+      <text x="470" y="0" fill="#FACC15" font-weight="700">Meridian Crest Bank</text>
+      <text x="635" y="0" fill="#94A3B8">| Vaults: </text>
+      <text x="705" y="0" fill="#38BDF8" font-weight="700">XXXX4821</text>
+      <text x="775" y="0" fill="#94A3B8">&amp;</text>
+      <text x="795" y="0" fill="#34D399" font-weight="700">XXXX7392</text>
+    </g>
+
+    <!-- Line 3: Inter-Account Transfer Match -->
+    <g class="line-3" transform="translate(0, 56)">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:13]</text>
+      <text x="175" y="0" fill="#00F2FE" font-weight="700">MATCH </text>
+      <text x="220" y="0" fill="#10B981" font-weight="700">#TRF601 PAIR VERIFIED</text>
+      <text x="390" y="0" fill="#E2E8F0">Dr: ₹10,000 (Ac 4821) ⇄ Cr: ₹10,000 (Ac 7392)</text>
+      <text x="740" y="0" fill="#38BDF8" font-weight="700">[Conf: 99.8%]</text>
+    </g>
+
+    <!-- Line 4: Refund Pairing -->
+    <g class="line-4" transform="translate(0, 84)">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:14]</text>
+      <text x="175" y="0" fill="#10B981" font-weight="700">REFUND</text>
+      <text x="220" y="0" fill="#E2E8F0">Purchase </text>
+      <text x="290" y="0" fill="#F87171" font-weight="700">#F771</text>
+      <text x="335" y="0" fill="#E2E8F0">(₹8,499) linked to Credit </text>
+      <text x="515" y="0" fill="#34D399" font-weight="700">₹3,000 + ₹2,499</text>
+      <text x="640" y="0" fill="#94A3B8">| Rem: </text>
+      <text x="690" y="0" fill="#FBBF24" font-weight="700">₹3,000.00</text>
+    </g>
+
+    <!-- Line 5: Duplicate Protection -->
+    <g class="line-5" transform="translate(0, 112)">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:15]</text>
+      <text x="175" y="0" fill="#F59E0B" font-weight="700">AUDIT </text>
+      <text x="220" y="0" fill="#E2E8F0">Sliding window duplicate scan completed across </text>
+      <text x="590" y="0" fill="#38BDF8" font-weight="700">300 pairs</text>
+      <text x="670" y="0" fill="#10B981" font-weight="700">➔ 0 Anomaly</text>
+    </g>
+
+    <!-- Line 6: Summary Badge -->
+    <g class="line-6" transform="translate(0, 140)">
+      <text y="0" fill="#64748B">[2026-11-21 20:30:16]</text>
+      <text x="175" y="0" fill="#10B981" font-weight="700">STATUS</text>
+      <text x="220" y="0" fill="#10B981" font-weight="700">✔ RECONCILIATION COMPLETE:</text>
+      <text x="445" y="0" fill="#F8FAFC">8 Suggested Cases Generated • Zero Data Discrepancy</text>
+    </g>
+
+    <!-- Line 7: Interactive prompt with blinking cursor -->
+    <g class="line-7" transform="translate(0, 172)">
+      <text y="0" fill="#00F2FE" font-weight="700">finwell@ledger:~$</text>
+      <text x="145" y="0" fill="#F8FAFC">finwell status --all-vaults --format=verified</text>
+      <text x="495" y="0" fill="#00F2FE" class="cursor" font-weight="900">█</text>
+    </g>
+  </g>
+
+  <!-- Bottom Command Bar -->
+  <g transform="translate(24, 280)">
+    <rect width="892" height="46" rx="8" fill="#0A0F1D" stroke="#1E293B" stroke-width="1"/>
+    
+    <!-- Item 1: Ingestion Throughput -->
+    <g transform="translate(20, 14)">
+      <text font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700" fill="#64748B">PDF SPEED</text>
+      <text y="17" font-family="SFMono-Regular, Consolas, monospace" font-size="12" font-weight="800" fill="#00F2FE">50+ Pgs / Sec</text>
+    </g>
+    <line x1="170" y1="8" x2="170" y2="38" stroke="#1E293B" stroke-width="1"/>
+
+    <!-- Item 2: Heuristic Accuracy -->
+    <g transform="translate(200, 14)">
+      <text font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700" fill="#64748B">MATCH CONFIDENCE</text>
+      <text y="17" font-family="SFMono-Regular, Consolas, monospace" font-size="12" font-weight="800" fill="#10B981">99.8% Heuristic</text>
+    </g>
+    <line x1="375" y1="8" x2="375" y2="38" stroke="#1E293B" stroke-width="1"/>
+
+    <!-- Item 3: Leakage Prevented -->
+    <g transform="translate(405, 14)">
+      <text font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700" fill="#64748B">UNCLAIMED REFUNDS</text>
+      <text y="17" font-family="SFMono-Regular, Consolas, monospace" font-size="12" font-weight="800" fill="#38BDF8">100% Tracked</text>
+    </g>
+    <line x1="575" y1="8" x2="575" y2="38" stroke="#1E293B" stroke-width="1"/>
+
+    <!-- Item 4: Audit Trial -->
+    <g transform="translate(605, 14)">
+      <text font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700" fill="#64748B">AUDIT LOGGING</text>
+      <text y="17" font-family="SFMono-Regular, Consolas, monospace" font-size="12" font-weight="800" fill="#C084FC">Non-Destructive</text>
+    </g>
+  </g>
+</svg>

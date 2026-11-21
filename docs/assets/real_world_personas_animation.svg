@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 370" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="personaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#040814"/>
+      <stop offset="50%" stop-color="#091124"/>
+      <stop offset="100%" stop-color="#050B18"/>
+    </linearGradient>
+
+    <!-- Card Backgrounds -->
+    <linearGradient id="cardGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0E1B33" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#091326" stop-opacity="0.98"/>
+    </linearGradient>
+
+    <linearGradient id="cardGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0C232A" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#07171C" stop-opacity="0.98"/>
+    </linearGradient>
+
+    <linearGradient id="cardGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E1433" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#140C24" stop-opacity="0.98"/>
+    </linearGradient>
+
+    <!-- Persona Glow Filters -->
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="glowEmerald" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="glowViolet" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <style>
+      @keyframes float1 {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+      }
+      @keyframes float2 {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-7px); }
+      }
+      @keyframes float3 {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+      @keyframes badgePulse {
+        0%, 100% { opacity: 0.9; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.04); }
+      }
+      @keyframes checkPop {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(0.95); }
+      }
+      @keyframes streamDot {
+        from { stroke-dashoffset: 40; }
+        to { stroke-dashoffset: 0; }
+      }
+
+      .p-card-1 { animation: float1 4.5s ease-in-out infinite; }
+      .p-card-2 { animation: float2 5s ease-in-out infinite 0.8s; }
+      .p-card-3 { animation: float3 4.2s ease-in-out infinite 1.5s; }
+      .pulse-pill { animation: badgePulse 2.8s ease-in-out infinite; }
+      .pulse-check { animation: checkPop 2s ease-in-out infinite; }
+      .dash-stream { stroke-dasharray: 6 4; animation: streamDot 1.2s linear infinite; }
+    </style>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="940" height="370" rx="18" fill="url(#personaBg)"/>
+
+  <!-- Top Title Banner -->
+  <g transform="translate(40, 32)">
+    <rect x="0" y="0" width="168" height="22" rx="11" fill="#0284C7" fill-opacity="0.2"/>
+    <text x="84" y="15" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="800" fill="#38BDF8" letter-spacing="1">
+      REAL-WORLD IMPACT
+    </text>
+    <text x="180" y="16" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="800" fill="#FFFFFF">
+      Why Millions of People Need Autonomous Reconciliation
+    </text>
+  </g>
+
+  <!-- ==================== PERSONA 1: THE MULTI-ACCOUNT PROFESSIONAL ==================== -->
+  <g class="p-card-1" transform="translate(40, 75)">
+    <!-- Card Base -->
+    <rect width="270" height="265" rx="14" fill="url(#cardGrad1)" stroke="#38BDF8" stroke-width="1.2" stroke-opacity="0.7"/>
+
+    <!-- Avatar Header -->
+    <g transform="translate(20, 20)">
+      <!-- Avatar Circle with Glowing Ring -->
+      <circle cx="22" cy="22" r="22" fill="#0C213D" stroke="#00F2FE" stroke-width="1.5" filter="url(#glowCyan)"/>
+      <!-- User Silhouette Icon -->
+      <path d="M22 13 C25.3 13 28 15.7 28 19 C28 22.3 25.3 25 22 25 C18.7 25 16 22.3 16 19 C16 15.7 18.7 13 22 13 Z" fill="#38BDF8"/>
+      <path d="M12 33 C12 28.5 16.5 27 22 27 C27.5 27 32 28.5 32 33" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- Name & Persona -->
+      <text x="56" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="800" fill="#FFFFFF">
+        Priya Sharma
+      </text>
+      <text x="56" y="32" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="#38BDF8">
+        Freelance Architect • 3 Bank Vaults
+      </text>
+    </g>
+
+    <!-- The Problem Box -->
+    <g transform="translate(20, 80)">
+      <rect width="230" height="60" rx="8" fill="#1E1624" stroke="#EF4444" stroke-width="0.8" stroke-opacity="0.6"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#F87171" letter-spacing="0.5">
+        ⚠️ THE NIGHTMARE:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        "I move funds via UPI between my
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        Savings &amp; Current. Taxes count it as double income!"
+      </text>
+    </g>
+
+    <!-- The FinWell AI Solution Box -->
+    <g transform="translate(20, 150)">
+      <rect width="230" height="65" rx="8" fill="#081E2E" stroke="#00F2FE" stroke-width="1" stroke-opacity="0.8"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#38BDF8" letter-spacing="0.5">
+        ⚡ FINWELL AI FIX:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="600" fill="#FFFFFF">
+        Auto-detects #TRF refs across vaults.
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#94A3B8">
+        Pairs Debit ↔ Credit in 12ms. Zero double taxation.
+      </text>
+    </g>
+
+    <!-- Result Metric Pill -->
+    <g class="pulse-pill" transform="translate(20, 226)">
+      <rect width="230" height="26" rx="6" fill="#00F2FE" fill-opacity="0.12" stroke="#00F2FE" stroke-width="0.8"/>
+      <text x="115" y="17" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9.5" font-weight="800" fill="#00F2FE">
+        SAVED: 8 HRS/MO + ₹45K TAX LEAK
+      </text>
+    </g>
+  </g>
+
+  <!-- ==================== PERSONA 2: THE E-COMMERCE & REFUND SEEKER ==================== -->
+  <g class="p-card-2" transform="translate(335, 75)">
+    <!-- Card Base -->
+    <rect width="270" height="265" rx="14" fill="url(#cardGrad2)" stroke="#10B981" stroke-width="1.2" stroke-opacity="0.7"/>
+
+    <!-- Avatar Header -->
+    <g transform="translate(20, 20)">
+      <!-- Avatar Circle with Glowing Ring -->
+      <circle cx="22" cy="22" r="22" fill="#082A22" stroke="#10B981" stroke-width="1.5" filter="url(#glowEmerald)"/>
+      <!-- User Silhouette Icon -->
+      <path d="M22 13 C25.3 13 28 15.7 28 19 C28 22.3 25.3 25 22 25 C18.7 25 16 22.3 16 19 C16 15.7 18.7 13 22 13 Z" fill="#34D399"/>
+      <path d="M12 33 C12 28.5 16.5 27 22 27 C27.5 27 32 28.5 32 33" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- Name & Persona -->
+      <text x="56" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="800" fill="#FFFFFF">
+        Rahul Verma
+      </text>
+      <text x="56" y="32" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="#34D399">
+        Product Designer • Active Online Buyer
+      </text>
+    </g>
+
+    <!-- The Problem Box -->
+    <g transform="translate(20, 80)">
+      <rect width="230" height="60" rx="8" fill="#1E1624" stroke="#EF4444" stroke-width="0.8" stroke-opacity="0.6"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#F87171" letter-spacing="0.5">
+        ⚠️ THE NIGHTMARE:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        "I returned items worth ₹4,200 on Amazon
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        and Flipkart. Did the bank credit ever arrive?"
+      </text>
+    </g>
+
+    <!-- The FinWell AI Solution Box -->
+    <g transform="translate(20, 150)">
+      <rect width="230" height="65" rx="8" fill="#082A22" stroke="#10B981" stroke-width="1" stroke-opacity="0.8"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#34D399" letter-spacing="0.5">
+        ⚡ FINWELL AI FIX:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="600" fill="#FFFFFF">
+        Automatic Refund Matcher links #F771 &amp; #A811
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#94A3B8">
+        to original debit orders with balance tracking.
+      </text>
+    </g>
+
+    <!-- Result Metric Pill -->
+    <g class="pulse-pill" transform="translate(20, 226)">
+      <rect width="230" height="26" rx="6" fill="#10B981" fill-opacity="0.12" stroke="#10B981" stroke-width="0.8"/>
+      <text x="115" y="17" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9.5" font-weight="800" fill="#34D399">
+        RECOVERED: ₹5,499 UNTRACKED REFUNDS
+      </text>
+    </g>
+  </g>
+
+  <!-- ==================== PERSONA 3: THE SMALL BUSINESS & AUDITOR ==================== -->
+  <g class="p-card-3" transform="translate(630, 75)">
+    <!-- Card Base -->
+    <rect width="270" height="265" rx="14" fill="url(#cardGrad3)" stroke="#A855F7" stroke-width="1.2" stroke-opacity="0.7"/>
+
+    <!-- Avatar Header -->
+    <g transform="translate(20, 20)">
+      <!-- Avatar Circle with Glowing Ring -->
+      <circle cx="22" cy="22" r="22" fill="#240E3E" stroke="#A855F7" stroke-width="1.5" filter="url(#glowViolet)"/>
+      <!-- User Silhouette Icon -->
+      <path d="M22 13 C25.3 13 28 15.7 28 19 C28 22.3 25.3 25 22 25 C18.7 25 16 22.3 16 19 C16 15.7 18.7 13 22 13 Z" fill="#C084FC"/>
+      <path d="M12 33 C12 28.5 16.5 27 22 27 C27.5 27 32 28.5 32 33" fill="none" stroke="#C084FC" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- Name & Persona -->
+      <text x="56" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="800" fill="#FFFFFF">
+        Vikram Singhania
+      </text>
+      <text x="56" y="32" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="#C084FC">
+        Agency Founder • 150+ Statements/Yr
+      </text>
+    </g>
+
+    <!-- The Problem Box -->
+    <g transform="translate(20, 80)">
+      <rect width="230" height="60" rx="8" fill="#1E1624" stroke="#EF4444" stroke-width="0.8" stroke-opacity="0.6"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#F87171" letter-spacing="0.5">
+        ⚠️ THE NIGHTMARE:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        "Spending entire weekends cross-referencing
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#E2E8F0">
+        Excel columns, duplicate charges &amp; fee slips!"
+      </text>
+    </g>
+
+    <!-- The FinWell AI Solution Box -->
+    <g transform="translate(20, 150)">
+      <rect width="230" height="65" rx="8" fill="#201138" stroke="#A855F7" stroke-width="1" stroke-opacity="0.8"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="800" fill="#C084FC" letter-spacing="0.5">
+        ⚡ FINWELL AI FIX:
+      </text>
+      <text x="12" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="600" fill="#FFFFFF">
+        Upload PDF statement -> 50 pgs/sec parsed.
+      </text>
+      <text x="12" y="48" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9.5" font-weight="500" fill="#94A3B8">
+        Full audit desk with one-click confirmation.
+      </text>
+    </g>
+
+    <!-- Result Metric Pill -->
+    <g class="pulse-pill" transform="translate(20, 226)">
+      <rect width="230" height="26" rx="6" fill="#A855F7" fill-opacity="0.12" stroke="#A855F7" stroke-width="0.8"/>
+      <text x="115" y="17" text-anchor="middle" font-family="SFMono-Regular, Consolas, monospace" font-size="9.5" font-weight="800" fill="#C084FC">
+        REDUCED AUDIT TIME: 20 HRS ➔ 3 MINS
+      </text>
+    </g>
+  </g>
+</svg>
