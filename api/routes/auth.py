@@ -81,6 +81,22 @@ def register(request: RegisterRequest):
             detail="Unable to create account. Please try again.",
         )
 
+    # Automatically initialize a primary checking vault for the new user
+    new_user_id = result.get("user_id")
+    if new_user_id:
+        try:
+            from mysql_pipeline.account_storage import create_account
+            create_account(
+                user_id=new_user_id,
+                account_name="Primary Checking Vault",
+                institution_name="Primary Institution",
+                account_type="savings",
+                masked_account_number="XXXX0001",
+                currency="INR",
+            )
+        except Exception:
+            pass
+
     return {
         "success": True,
         "message": "Account created successfully.",

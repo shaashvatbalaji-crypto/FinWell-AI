@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Cpu,
   Layers,
+  UploadCloud,
 } from 'lucide-react';
 import { TiltCard } from '../../components/3d/TiltCard';
 import { Badge } from '../../components/common/Badge';
@@ -256,6 +257,36 @@ export const ReconciliationPage: React.FC = () => {
         </div>
       )}
 
+      {/* Educational Guidance Banner for Single-Account / New Users */}
+      {accounts.length <= 1 && (
+        <div className="rounded-2xl border border-finwell-cyan/30 bg-finwell-cyan/10 p-4 text-xs text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-glow-sm">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="rounded-xl bg-finwell-cyan/20 p-2 text-finwell-cyan shrink-0">
+              <Layers className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="font-bold text-white text-sm">
+                {accounts.length === 1 ? 'Single Account Active — Scanning Intra-Statement Events' : 'No Financial Vaults Linked Yet'}
+              </h4>
+              <p className="text-finwell-muted text-xs mt-0.5">
+                {accounts.length === 1
+                  ? 'FinWell is currently scanning your active statement for duplicate swipe anomalies and merchant refunds. To unlock Inter-Account Transfer Pairing, upload a statement from your second bank (e.g., HDFC + ICICI or Savings + Credit Card).'
+                  : 'Upload your first PDF bank statement in the Documents tab to initiate automated ledger extraction and reconciliation.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href="/documents"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-finwell-cyan/20 hover:bg-finwell-cyan/30 text-finwell-cyan px-3.5 py-2 text-xs font-bold transition-colors border border-finwell-cyan/40"
+            >
+              <UploadCloud className="h-4 w-4" />
+              Upload Another Statement
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Live Evaluation Summary Banner (when user triggers Run Audit) */}
       {evalResult?.reconciliation?.summary && (
         <TiltCard className="p-5 border-finwell-cyan/30 bg-finwell-cyan/5 space-y-3">
@@ -304,12 +335,14 @@ export const ReconciliationPage: React.FC = () => {
           <div className="max-w-md space-y-1.5">
             <h3 className="text-lg font-bold text-white">
               {filterType === 'all'
-                ? 'All Vault Accounts Balanced & Reconciled'
+                ? (accounts.length <= 1 ? 'Statement Ingested & Audited — 0 Anomalies' : 'All Vault Accounts Balanced & Reconciled')
                 : `No Pending ${filterType.replace('_', ' ')} Cases`}
             </h3>
             <p className="text-xs text-finwell-muted">
               {filterType === 'all'
-                ? 'FinWell’s five-engine reconciliation pipeline analyzed all transaction flows across your connected vaults. No anomalous duplicate charges, unmirrored internal transfers, or unmatched refunds were detected.'
+                ? (accounts.length <= 1
+                    ? 'All transactions within your active account are cleanly balanced. No duplicate debit charges or unlinked merchant refunds were detected in this statement.'
+                    : 'FinWell’s five-engine reconciliation pipeline analyzed all transaction flows across your connected vaults. No anomalous duplicate charges, unmirrored internal transfers, or unmatched refunds were detected.')
                 : `No anomalies matching the "${filterType.replace('_', ' ')}" classification are pending manual review in your active statements.`}
             </p>
           </div>
@@ -325,24 +358,24 @@ export const ReconciliationPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-finwell-muted">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-finwell-cyan" />
-                Duplicate Detection Engine
+                Duplicate Detection Engine (Active)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${accounts.length >= 2 ? 'bg-finwell-cyan' : 'bg-finwell-warning'}`} />
+                Inter-Account Transfers {accounts.length < 2 && '(Requires 2+ Vaults)'}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-finwell-cyan" />
-                Inter-Account Transfers
+                Partial Refund Allocation (Active)
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-finwell-cyan" />
-                Partial Refund Allocation
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-finwell-cyan" />
-                Multi-Batch Settlement
+                Multi-Batch Settlement (Active)
               </span>
             </div>
           </div>
 
-          <div className="pt-2 flex items-center gap-3">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <Button
               variant="primary"
               size="sm"
@@ -353,6 +386,15 @@ export const ReconciliationPage: React.FC = () => {
             >
               {isEvaluating ? 'Running Audit Scan...' : 'Trigger Dry-Run Reconciliation Audit'}
             </Button>
+            {accounts.length <= 1 && (
+              <a
+                href="/documents"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-finwell-card hover:bg-finwell-surface text-white px-3.5 py-2 text-xs font-semibold transition-colors"
+              >
+                <UploadCloud className="h-3.5 w-3.5 text-finwell-cyan" />
+                Upload Second Statement
+              </a>
+            )}
           </div>
         </TiltCard>
       ) : (

@@ -17,12 +17,16 @@ _REFERENCE_PATTERNS = (
         re.I,
     ),
     re.compile(r"\b(TRF\s*[-/]?\s*[A-Z0-9]{3,})\b", re.I),
+    re.compile(r"\b(?:UPI|IMPS|NEFT|RTGS)[/:\s_-]*([A-Z0-9]{6,22})\b", re.I),
+    re.compile(r"\b(\d{10,16})\b"),
 )
 
 _TRANSFER_TERMS = re.compile(
     r"\b(?:OWN\s*A/?C|OWN\s*ACCOUNT|SELF\s*TRANSFER|"
     r"TRANSFER\s*TO\s*OWN|TRANSFER\s*FROM\s*OWN|"
-    r"TRF\s*TO\s*SELF|TRF\s*FROM\s*SELF)\b",
+    r"TRF\s*TO\s*SELF|TRF\s*FROM\s*SELF|SELF|INTERNAL|"
+    r"TRANSFER|TRF|TFR|NEFT|IMPS|RTGS|UPI|SWEEP|AUTO-SWEEP|"
+    r"TRANSFER\s*TO|TRANSFER\s*FROM|TFR\s*TO|TFR\s*FROM)\b",
     re.I,
 )
 
@@ -217,9 +221,6 @@ def reconcile_internal_transfers(
 
     # Identify transfer-like transactions and verify account ownership.
     for profile in profiles:
-        if not _TRANSFER_TERMS.search(profile["description"]):
-            continue
-
         account = _account_record(accounts, profile["account_id"])
         owner = _verified_owner(account)
 
@@ -267,10 +268,22 @@ def reconcile_internal_transfers(
             if date_gap > max_date_gap_days:
                 reasons.append("date_outside_matching_window")
 
-            if not left["reference"] or not right["reference"]:
-                reasons.append("reference_missing")
-            elif left["reference"] != right["reference"]:
+            ref_match = bool(
+                left.get("reference")
+                and right.get("reference")
+                and left["reference"] == right["reference"]
+            )
+            term_match = bool(
+                _TRANSFER_TERMS.search(left["description"])
+                or _TRANSFER_TERMS.search(right["description"])
+            )
+
+            # Check if reference mismatch when both sides have different references without transfer terms
+            if left.get("reference") and right.get("reference") and left["reference"] != right["reference"] and not term_match:
                 reasons.append("reference_mismatch")
+
+            if not ref_match and not term_match and date_gap > 1:
+                reasons.append("insufficient_transfer_evidence")
 
             if reasons:
                 comparisons.append({
@@ -282,6 +295,8 @@ def reconcile_internal_transfers(
                 })
                 continue
 
+            confidence = 0.99 if ref_match else (0.92 if term_match else 0.85)
+
             debit_leg = left if left["direction"] == "debit" else right
             credit_leg = right if debit_leg is left else left
 
@@ -289,6 +304,7 @@ def reconcile_internal_transfers(
                 "debit": debit_leg,
                 "credit": credit_leg,
                 "date_gap": date_gap,
+                "confidence": confidence,
             })
 
     # Count possible matches for each transaction.
@@ -321,17 +337,18 @@ def reconcile_internal_transfers(
             ambiguous_ids.add(credit_id)
             continue
 
+        conf_val = pair.get("confidence", 0.95)
         candidates.append({
             "case_type": "internal_transfer",
             "case_status": "suggested",
             "decision": "proposed_only",
             "auto_confirmed": False,
-            "confidence_score": None,
-            "confidence_label": "high",
-            "evidence_strength": "strong",
+            "confidence_score": conf_val,
+            "confidence_label": "high" if conf_val >= 0.9 else "medium",
+            "evidence_strength": "strong" if conf_val >= 0.9 else "moderate",
             "amount": str(debit["amount"]),
             "currency": debit["currency"],
-            "reference": debit["reference"],
+            "reference": debit.get("reference") or credit.get("reference") or "RECIPROCAL_TRANSFER",
             "date_gap_days": pair["date_gap"],
             "debit_transaction_id": debit_id,
             "credit_transaction_id": credit_id,
@@ -344,8 +361,6 @@ def reconcile_internal_transfers(
                 "exact_amount_match",
                 "currency_match",
                 "date_within_window",
-                "exact_reference_match",
-                "own_account_transfer_narration",
             ],
         })
 

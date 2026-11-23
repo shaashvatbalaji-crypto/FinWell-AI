@@ -468,8 +468,8 @@ from mysql_pipeline.account_storage import list_user_accounts
 
 def reconcile_user_from_database(
     user_id,
-    transaction_limit=500,
-    max_transfer_date_gap_days=1,
+    transaction_limit=1000,
+    max_transfer_date_gap_days=2,
     max_refund_date_gap_days=90,
 ):
     """
@@ -522,11 +522,16 @@ def reconcile_user_from_database(
 
     # 3. Prepare verified account metadata and associate currency
     account_map = {account["account_id"]: account for account in account_rows}
+    default_acc_id = account_rows[0]["account_id"] if account_rows else None
 
     for tx in transactions:
+        if not tx.get("account_id") and default_acc_id:
+            tx["account_id"] = default_acc_id
         acc = account_map.get(tx.get("account_id"))
         if acc and not tx.get("currency"):
-            tx["currency"] = acc.get("currency")
+            tx["currency"] = acc.get("currency", "INR")
+        elif not tx.get("currency"):
+            tx["currency"] = "INR"
 
     accounts = {
         account["account_id"]: {

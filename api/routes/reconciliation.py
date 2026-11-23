@@ -1,8 +1,11 @@
 """Authenticated reconciliation endpoints for FinWell AI."""
+import logging
 from typing import Literal, Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from api.auth_dependencies import get_current_user
 from mysql_pipeline.reconciliation_storage import (
@@ -33,13 +36,13 @@ def get_reconciliation_cases(
 ):
     """
     Retrieve pending reconciliation suggestions for the authenticated user.
-    Enforces strict user isolation.
+    Enforces strict user isolation. Runs auto-discovery on-demand.
     """
     try:
         from services.ingestion_service import _auto_discover_reconciliation_matches
         _auto_discover_reconciliation_matches(user_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Auto-discovery on cases fetch encountered: %s", exc)
 
     result = list_pending_matches(user_id=user_id, limit=limit)
 
